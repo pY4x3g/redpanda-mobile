@@ -83,6 +83,11 @@ class RedPandaLightClient implements RedPandaClient {
         _currentStatus = ConnectionStatus.connected;
         _connectionStatusController.add(ConnectionStatus.connected);
       }
+    } else if (status == ConnectionStatus.connecting) {
+      if (_currentStatus != ConnectionStatus.connected) {
+        _currentStatus = ConnectionStatus.connecting;
+        _connectionStatusController.add(ConnectionStatus.connecting);
+      }
     } else {
       // Check if any peer is connected
       bool anyConnected = _peers.values.any((p) => p.isHandshakeVerified);
