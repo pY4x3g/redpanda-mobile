@@ -83,7 +83,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ],
           ),
           loading: () => const Text("Loading..."),
-          error: (_, __) => const Text("Chat"),
+          error: (_, _) => const Text("Chat"),
         ),
         actions: [
           channelAsync.when(
@@ -103,7 +103,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               );
             },
             loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
           ),
         ],
       ),

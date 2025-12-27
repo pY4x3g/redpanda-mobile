@@ -83,7 +83,7 @@ class ConnectionStatusBadge extends ConsumerWidget {
         height: 24,
         child: CircularProgressIndicator(strokeWidth: 2),
       ),
-      error: (_, __) => const Icon(Icons.error, color: Colors.red),
+      error: (_, _) => const Icon(Icons.error, color: Colors.red),
     );
   }
 }

@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:redpanda/database/database.dart';
+
 import 'package:redpanda/screens/onboarding/onboarding_screen.dart';
 import 'package:redpanda/screens/home/home_screen.dart';
 import 'package:redpanda/screens/chat/chat_screen.dart';
