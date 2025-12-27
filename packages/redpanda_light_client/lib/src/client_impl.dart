@@ -244,7 +244,8 @@ class ActivePeer {
     _socket?.destroy(); // or close
     _socket = null;
     _status = ConnectionStatus.disconnected;
-    onStatusChange(ConnectionStatus.connected); // Trigger update check (will see disconnected)
+    _handshakeVerified = false; 
+    onStatusChange(ConnectionStatus.disconnected); 
     onDisconnect();
   }
 
