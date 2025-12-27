@@ -18,16 +18,12 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   void initState() {
     super.initState();
-    // Trigger connection startup once
+    // Synchronous connection trigger (KeyPair gen is now fast)
     ref.read(redPandaClientProvider).connect();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Router provider might also need to be accessible. Check if it's in shared/providers or router.dart
-    // Based on previous file, routerProvider was accessed via `ref.watch(routerProvider)`.
-    // Assuming it is exported from router.dart or shared. 
-    // Previous code: `import 'package:redpanda/router.dart';` and `final router = ref.watch(routerProvider);`
     final router = ref.watch(routerProvider);
     
     return MaterialApp.router(

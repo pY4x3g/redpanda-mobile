@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:hex/hex.dart';
 import 'package:pointycastle/ecc/api.dart'; // Needed for ECPublicKey field
 
 import 'package:redpanda_light_client/src/security/encryption_manager.dart';
@@ -35,6 +36,8 @@ class RedPandaLightClient implements RedPandaClient {
   static const int REQUEST_PUBLIC_KEY = 1;
   static const int SEND_PUBLIC_KEY = 2;
   static const int ACTIVATE_ENCRYPTION = 3;
+  static const int PING = 5;
+  static const int PONG = 6;
 
   final List<String> seeds;
   Socket? _socket;
@@ -43,13 +46,16 @@ class RedPandaLightClient implements RedPandaClient {
   // State
   bool _handshakeVerified = false;
   bool _publicKeySent = false;
+  Future<void>? _handshakeInitiationFuture;
   
   final EncryptionManager _encryptionManager = EncryptionManager();
   
   bool get isEncryptionActive => _encryptionManager.isEncryptionActive;
+  bool get isPongSent => _pongSent;
 
   ECPublicKey? _peerPublicKey;
   Uint8List? _randomFromUs;
+  bool _pongSent = false;
 
   RedPandaLightClient({
     required this.selfNodeId,
@@ -58,15 +64,23 @@ class RedPandaLightClient implements RedPandaClient {
   });
 
   @override
-  Stream<ConnectionStatus> get connectionStatus => _connectionStatusController.stream;
+  Stream<ConnectionStatus> get connectionStatus async* {
+    yield _currentStatus;
+    yield* _connectionStatusController.stream;
+  }
+
+  void _updateStatus(ConnectionStatus status) {
+    _currentStatus = status;
+    _connectionStatusController.add(status);
+  }
 
   @override
   Future<void> connect() async {
-    _connectionStatusController.add(ConnectionStatus.connecting);
+    _updateStatus(ConnectionStatus.connecting);
     print('RedPandaLightClient: Connecting to network via seeds: $seeds');
 
     if (seeds.isEmpty) {
-      _connectionStatusController.add(ConnectionStatus.disconnected);
+      _updateStatus(ConnectionStatus.disconnected);
       return;
     }
 
@@ -87,17 +101,17 @@ class RedPandaLightClient implements RedPandaClient {
         _handleSocketData,
         onError: (e) {
           print('RedPandaLightClient socket error: $e');
-          _connectionStatusController.add(ConnectionStatus.disconnected);
+          _updateStatus(ConnectionStatus.disconnected);
         },
         onDone: () {
           print('RedPandaLightClient socket closed');
-          _connectionStatusController.add(ConnectionStatus.disconnected);
+          _updateStatus(ConnectionStatus.disconnected);
         },
       );
 
     } catch (e) {
       print('RedPandaLightClient connection failed: $e');
-      _connectionStatusController.add(ConnectionStatus.disconnected);
+      _updateStatus(ConnectionStatus.disconnected);
       rethrow;
     }
   }
@@ -130,62 +144,115 @@ class RedPandaLightClient implements RedPandaClient {
      print('RedPandaLightClient: Handshake sent (${buffer.length} bytes)');
   }
 
-  void _handleSocketData(Uint8List data) {
-    var processData = data;
-    
-    if (_encryptionManager.isEncryptionActive) {
-      // Decrypt incoming data in place (or new buffer)
-      processData = _encryptionManager.decrypt(data);
-      print('RedPandaLightClient: Decrypted ${data.length} bytes.');
-    }
+  bool _isProcessingBuffer = false;
+  ConnectionStatus _currentStatus = ConnectionStatus.disconnected;
 
+  void _handleSocketData(Uint8List data) {
+    // 1. Decrypt if needed
+    var processData = data;
+    if (_encryptionManager.isEncryptionActive) {
+      processData = _encryptionManager.decrypt(data);
+    }
     _buffer.addAll(processData);
     print('RedPandaLightClient received: ${data.length} bytes (Decrypted: $isEncryptionActive). Total buffer: ${_buffer.length}');
+    
+    // 2. Trigger processing loop if not already running
+    if (!_isProcessingBuffer) {
+      _processBuffer();
+    }
+  }
 
-    while (true) {
-      if (!_handshakeVerified) {
-        if (_buffer.length >= HANDSHAKE_LENGTH) {
-           _processHandshake();
-           continue; // Check if there is more data
-        } else {
-          break; // Need more data
-        }
-      } else {
-        // Handshake verified, process commands
+  Future<void> _processBuffer() async {
+    if (_isProcessingBuffer) return; // Prevention
+    _isProcessingBuffer = true;
+
+    try {
+      while (true) {
         if (_buffer.isEmpty) break;
 
-        final command = _buffer[0];
-        if (command == REQUEST_PUBLIC_KEY) {
-           print('RedPandaLightClient: Received REQUEST_PUBLIC_KEY');
-           _buffer.removeAt(0); // Consume command byte
-           _sendPublicKey();
-        } else if (command == ACTIVATE_ENCRYPTION) {
-           print('RedPandaLightClient: Received ACTIVATE_ENCRYPTION');
-           if (_buffer.length < 1 + 8) {
-             print('RedPandaLightClient: Waiting for random bytes...');
-             break; // Need more data (request byte + 8 random bytes)
-           }
-           _buffer.removeAt(0); // Consume command byte
-           
-           final randomFromThem = _buffer.sublist(0, 8);
-           _buffer.removeRange(0, 8);
-           
-           _handlePeerEncryptionRandom(Uint8List.fromList(randomFromThem));
-        } else if (command == SEND_PUBLIC_KEY) {
-           print('RedPandaLightClient: Received SEND_PUBLIC_KEY');
-           if (_buffer.length < 1 + 65) {
-              print('RedPandaLightClient: Waiting for Public Key bytes...');
-              break; 
-           }
-           _buffer.removeAt(0); // Consume command
-           final keyBytes = _buffer.sublist(0, 65);
-           _buffer.removeRange(0, 65);
-           
-           _parsePeerPublicKey(keyBytes);
+        if (!_handshakeVerified) {
+          if (_buffer.length >= HANDSHAKE_LENGTH) {
+            _processHandshake();
+            continue; 
+          } else {
+            break; // Need more data
+          }
         } else {
-             // ...
+          // Handshake verified, process commands
+          final command = _buffer[0];
+          
+          if (command == REQUEST_PUBLIC_KEY) {
+            print('RedPandaLightClient: Received REQUEST_PUBLIC_KEY');
+            _buffer.removeAt(0); 
+            _sendPublicKey();
+          } else if (command == ACTIVATE_ENCRYPTION) {
+            print('RedPandaLightClient: Received ACTIVATE_ENCRYPTION');
+            if (_buffer.length < 1 + 8) {
+              print('RedPandaLightClient: Waiting for random bytes...');
+              break; 
+            }
+
+            // Await our handshake initiation IF it exists
+            if (_handshakeInitiationFuture != null) {
+              await _handshakeInitiationFuture;
+            }
+
+            _buffer.removeAt(0); 
+            final randomFromThem = _buffer.sublist(0, 8);
+            _buffer.removeRange(0, 8); // remove bytes
+            
+            await _handlePeerEncryptionRandom(Uint8List.fromList(randomFromThem));
+          } else if (command == SEND_PUBLIC_KEY) {
+            print('RedPandaLightClient: Received SEND_PUBLIC_KEY');
+            if (_buffer.length < 1 + 65) {
+               print('RedPandaLightClient: Waiting for Public Key bytes...');
+               break; 
+            }
+            _buffer.removeAt(0); 
+            final keyBytes = _buffer.sublist(0, 65);
+            _buffer.removeRange(0, 65);
+            
+            _parsePeerPublicKey(keyBytes);
+          } else if (command == PING) {
+            print('RedPandaLightClient: Received PING (Encrypted). Sending PONG...');
+            _buffer.removeAt(0); 
+            _sendPong();
+          } else if (command == PONG) {
+            print('RedPandaLightClient: Received PONG (Encrypted).');
+            _buffer.removeAt(0);
+          } else {
+             // Unknown command
+             print('RedPandaLightClient: Unknown command byte: $command. Discarding byte to prevent loop.');
+             _buffer.removeAt(0);
+             // Alternatively, we could break or disconnect, but consuming ensures we don't loop forever.
+          }
         }
       }
+    } catch (e, stack) {
+      print('RedPandaLightClient: Error processing buffer: $e');
+      print(stack);
+    } finally {
+      _isProcessingBuffer = false;
+      // If data arrived while we were awaiting (e.g. handshake future), check if we need to run again?
+      // Actually, since we append to _buffer synchronously in _handleSocketData,
+      // and we just finished the loop which checks _buffer.isEmpty, we should be good.
+      // BUT if we awaited _handshakeInitiationFuture, new data might have arrived and added to _buffer,
+      // AND we might have exited the loop or not. 
+      // If we are in the loop, we continue processing.
+      // If we broke out of loop (e.g. need more data), and new data arrived, _handleSocketData would see _isProcessingBuffer=true and return.
+      // So we need to re-check buffer at end? 
+      // A better pattern is:
+      // while(buffer has data) { ... }
+      // But _handleSocketData adds data.
+      // If _ProcessBuffer exits while data is there (unlikely unless waiting for bytes), it's fine.
+      // If it exits because waiting for future? No, await pauses execution, doesn't exit function.
+      
+      // Edge case: _handleSocketData adds data while _processBuffer is at 'await'.
+      // _processBuffer resumes. It sees new data in _buffer (since it's same list object).
+      // So it continues.
+      
+      // Edge case: _processBuffer finishes loop (break needs more data). Sets flag false.
+      // _handleSocketData adds new data -> calls _processBuffer. Correct.
     }
   }
 
@@ -199,7 +266,7 @@ class RedPandaLightClient implements RedPandaClient {
       
       // Initiate Encryption Handshake if not already done
       if (_randomFromUs == null) {
-          _initiateEncryptionHandshake();
+          _handshakeInitiationFuture = _initiateEncryptionHandshake();
       }
   }
 
@@ -207,22 +274,22 @@ class RedPandaLightClient implements RedPandaClient {
       print('RedPandaLightClient: Initiating Encryption Handshake...');
       _randomFromUs = _encryptionManager.generateRandomFromUs();
       
-      // Workaround: Java Server drops trailing bytes if multiple commands arrive in one packet.
-      // We must ensure this is a separate packet.
-      await Future.delayed(const Duration(milliseconds: 1000));
+      // Separate packet to avoid server buffering issues
+      await Future.delayed(const Duration(milliseconds: 100));
 
       final buffer = BytesBuilder();
       buffer.addByte(ACTIVATE_ENCRYPTION);
       buffer.add(_randomFromUs!);
-      _sendData(buffer.toBytes());
+      _sendData(buffer.toBytes(), forceUnencrypted: true); // MUST be unencrypted
       print('RedPandaLightClient: Sent ACTIVATE_ENCRYPTION request.');
   }
 
-  void _handlePeerEncryptionRandom(Uint8List randomFromThem) {
+  Future<void> _handlePeerEncryptionRandom(Uint8List randomFromThem) async {
      if (_randomFromUs == null) {
         // We received random from peer but haven't sent ours yet (Server initiated?)
         // Send ours now.
-        _initiateEncryptionHandshake();
+        _handshakeInitiationFuture = _initiateEncryptionHandshake();
+        await _handshakeInitiationFuture;
      }
      
      _finalizeEncryption(randomFromThem);
@@ -245,6 +312,10 @@ class RedPandaLightClient implements RedPandaClient {
       );
       
       print('RedPandaLightClient: Encryption Active! Ciphers initialized.');
+      
+      // The server expects PING as the first encrypted command to verify the channel.
+      print('RedPandaLightClient: Sending Initial PING (Encrypted) to verify handshake...');
+      _sendData([PING]);
       
       // Decrypt any remaining bytes in the buffer that arrived with the activation packet
       if (_buffer.isNotEmpty) {
@@ -272,7 +343,7 @@ class RedPandaLightClient implements RedPandaClient {
       
       print('RedPandaLightClient: Handshake Verified.');
       _handshakeVerified = true;
-      _connectionStatusController.add(ConnectionStatus.connected);
+      _updateStatus(ConnectionStatus.connected);
       
       // Clear handshake from buffer
       _buffer.removeRange(0, HANDSHAKE_LENGTH);
@@ -291,13 +362,19 @@ class RedPandaLightClient implements RedPandaClient {
     _publicKeySent = true;
   }
 
+  void _sendPong() {
+    print('RedPandaLightClient: Sending PONG...');
+    _sendData([PONG]);
+    _pongSent = true;
+  }
 
 
-  void _sendData(List<int> data) {
+
+  void _sendData(List<int> data, {bool forceUnencrypted = false}) {
     if (_socket == null) return;
     
     Uint8List output;
-    if (_encryptionManager.isEncryptionActive) {
+    if (_encryptionManager.isEncryptionActive && !forceUnencrypted) {
       output = _encryptionManager.encrypt(Uint8List.fromList(data));
     } else {
       output = Uint8List.fromList(data);
@@ -311,7 +388,7 @@ class RedPandaLightClient implements RedPandaClient {
   @override
   Future<void> disconnect() async {
     // TODO: Graceful shutdown
-    _connectionStatusController.add(ConnectionStatus.disconnected);
+    _updateStatus(ConnectionStatus.disconnected);
   }
 
   @override

@@ -28,12 +28,12 @@ class NodeId extends Equatable {
   factory NodeId.fromPublicKey(KeyPair keys) {
       final pubKeyBytes = keys.publicKeyBytes;
       final digest = SHA256Digest();
-      final hash = digest.process(pubKeyBytes); // 32 bytes
+      // KademliaId is computed from SINGLE SHA-256 of the uncompressed public key (65 bytes)
+      final hash = digest.process(pubKeyBytes); 
       
-      // KademliaId.fromFirstBytes takes first 20 bytes?
-      // Assuming straightforward truncation.
       return NodeId(hash.sublist(0, length));
   }
+
 
   String toHex() => HEX.encode(bytes);
 

@@ -19,7 +19,7 @@ void main() {
       await launcher.start();
 
       // 2. Init client
-      final keys = KeyPair.generate();
+      final keys = NodeId.generateValidKeyPair();
       client = RedPandaLightClient(
         selfNodeId: NodeId.fromPublicKey(keys),
         selfKeys: keys,
