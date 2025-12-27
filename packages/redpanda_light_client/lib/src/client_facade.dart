@@ -14,4 +14,7 @@ abstract class RedPandaClient {
   /// Sends a message to a public key (hex string).
   /// Returns a message ID.
   Future<String> sendMessage(String recipientPublicKey, String content);
+
+  /// Adds a peer address (host:port) to the connection pool.
+  void addPeer(String address);
 }

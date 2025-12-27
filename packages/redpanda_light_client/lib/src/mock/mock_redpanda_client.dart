@@ -27,4 +27,9 @@ class MockRedPandaClient implements RedPandaClient {
     await Future.delayed(Duration(milliseconds: 500));
     return "mock-message-id-${DateTime.now().millisecondsSinceEpoch}";
   }
+  @override
+  void addPeer(String address) {
+    // Mock implementation - do nothing or log
+    print('MockRedPandaClient: Added peer $address');
+  }
 }
