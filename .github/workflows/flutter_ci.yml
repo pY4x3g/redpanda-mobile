@@ -20,6 +20,12 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
       - name: Install dependencies (Light Client)
         run: |
           cd packages/redpanda_light_client
