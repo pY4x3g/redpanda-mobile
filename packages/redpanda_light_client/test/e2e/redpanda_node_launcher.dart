@@ -16,11 +16,11 @@ class RedPandaNodeLauncher {
   Future<void> start() async {
     // Locate the jar file relative to the project root
     final projectRoot = _findProjectRoot();
-    
+
     // Try to find the redpandaj directory (case-insensitive)
     final referencesDir = Directory(p.join(projectRoot, 'references'));
     String redpandajDirName = 'redPandaj'; // Default
-    
+
     if (referencesDir.existsSync()) {
       final dirs = referencesDir.listSync().whereType<Directory>();
       for (final dir in dirs) {
