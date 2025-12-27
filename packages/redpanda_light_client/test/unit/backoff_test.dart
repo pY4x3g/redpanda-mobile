@@ -3,18 +3,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:redpanda_light_client/redpanda_light_client.dart';
-import 'package:redpanda_light_client/src/client_impl.dart';
-import 'package:redpanda_light_client/src/models/key_pair.dart';
-import 'package:redpanda_light_client/src/models/node_id.dart';
 import 'package:test/test.dart';
 import 'package:mocktail/mocktail.dart';
 
 class FakeSocket extends Fake implements Socket {
-  @override
-  dynamic noSuchMethod(Invocation invocation) {
-    return super.noSuchMethod(invocation);
-  }
-
   @override
   bool setOption(SocketOption option, bool enabled) => true;
 

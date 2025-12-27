@@ -161,15 +161,17 @@ class RedPandaLightClient implements RedPandaClient {
     }
 
     for (final address in _knownAddresses) {
+      // Check backoff first
+      if (_nextRetryTime.containsKey(address)) {
+        if (DateTime.now().isBefore(_nextRetryTime[address]!)) {
+          // print('RedPandaLightClient: In backoff for $address. Skipping.');
+          continue;
+        }
+      }
+
       if (_peers.containsKey(address)) {
         final peer = _peers[address]!;
         if (peer.isDisconnected) {
-          if (_nextRetryTime.containsKey(address)) {
-            if (DateTime.now().isBefore(_nextRetryTime[address]!)) {
-              // print('RedPandaLightClient: In backoff for $address. Skipping.');
-              continue;
-            }
-          }
           print(
             'RedPandaLightClient: Peer $address is disconnected. Retrying...',
           );
@@ -215,8 +217,23 @@ class RedPandaLightClient implements RedPandaClient {
           socketFactory: _socketFactory,
           onStatusChange: _updateStatus,
           onDisconnect: () {
-            // Peer calls this when socket closes
-            // We don't remove immediately, routine will clean up
+            // Handle Backoff on disconnect
+            // We increment retry count here.
+            // Note: success clears it in _updateStatus.
+
+            final attempts = (_retryCounts[address] ?? 0) + 1;
+            _retryCounts[address] = attempts;
+
+            final delaySeconds =
+                _initialBackoff.inSeconds * (1 << (attempts - 1)); // 2^n
+            // Clamp to max
+            final delay = Duration(seconds: delaySeconds);
+            final clampedDelay = delay > _maxBackoff ? _maxBackoff : delay;
+
+            _nextRetryTime[address] = DateTime.now().add(clampedDelay);
+            print(
+              'RedPandaLightClient: Disconnected $address. Backoff set to $clampedDelay',
+            );
           },
           onPeersReceived: (peers) {
             print(
@@ -231,21 +248,6 @@ class RedPandaLightClient implements RedPandaClient {
         peer.connect(); // Fire and forget (it is async inside)
       } catch (e) {
         print('RedPandaLightClient: Failed to initiate peer $address: $e');
-
-        // Handle Backoff
-        final attempts = (_retryCounts[address] ?? 0) + 1;
-        _retryCounts[address] = attempts;
-
-        final delaySeconds =
-            _initialBackoff.inSeconds * (1 << (attempts - 1)); // 2^n
-        // Clamp to max
-        final delay = Duration(seconds: delaySeconds);
-        final clampedDelay = delay > _maxBackoff ? _maxBackoff : delay;
-
-        _nextRetryTime[address] = DateTime.now().add(clampedDelay);
-        print(
-          'RedPandaLightClient: Backoff for $address set to $clampedDelay (Next retry: ${_nextRetryTime[address]})',
-        );
       }
     }
   }
