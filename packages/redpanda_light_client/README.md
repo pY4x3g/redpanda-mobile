@@ -1,39 +1,71 @@
-<!-- 
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# RedPanda Light Client
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages). 
+A lightweight, P2P networking library for Dart/Flutter, implementing the RedPanda protocol. This client is optimized for mobile environments, providing essential connectivity and messaging features without the overhead of a full node.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages). 
--->
+## 📦 Features
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+- **Decentralized Communication**: Direct TCP socket connections between peers.
+- **Protocol Buffers**: Type-safe command serialization using Protobuf.
+- **End-to-End Encryption**: 
+  - ECC Key Pair generation.
+  - Diffie-Hellman Shared Secret derivation.
+  - Robust handshake state machine with handling for out-of-order encryption activation.
+- **Smart Peer Discovery**: Kademlia-inspired peer exchange (`SEND_PEERLIST`).
+- **Resilient Connection Management**:
+  - Background connection/reconnection routine.
+  - DNS-based peer deduplication to prevent redundant socket connections.
+  - Support for multiple seed nodes.
 
-## Features
+## 🛠 Usage
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
-
-## Getting started
-
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder. 
+### Initialization
 
 ```dart
-const like = 'sample';
+final keys = KeyPair.generate();
+final selfNodeId = NodeId.fromPublicKey(keys);
+
+final client = RedPandaLightClient(
+  selfNodeId: selfNodeId,
+  selfKeys: keys,
+  seeds: ['seed1.redpanda.im:59558', 'seed2.redpanda.im:59558'],
+);
+
+await client.connect();
 ```
 
-## Additional information
+### Listening for Status
 
-TODO: Tell users more about the package: where to find more information, how to 
-contribute to the package, how to file issues, what response they can expect 
-from the package authors, and more.
+```dart
+client.connectionStatus.listen((status) {
+  print('Connection Status: $status');
+});
+
+client.peerCountStream.listen((count) {
+  print('Connected Peers: $count');
+});
+```
+
+### Adding Peers
+
+```dart
+await client.addPeer('another-node.com:59558');
+```
+
+## 🏗 Architecture
+
+The client follows a facade-based architecture:
+- `RedPandaClient`: The public interface.
+- `RedPandaLightClient`: The main implementation managing the peer pool.
+- `ActivePeer`: Handles individual TCP connections, framing, and encryption status.
+- `EncryptionManager`: Manages cryptographic handshakes and packet encryption/decryption.
+
+## 🔬 Testing
+
+The package includes a comprehensive unit and E2E test suite. E2E tests can interact with a local Java-based RedPanda full node launcher.
+
+```bash
+flutter test
+```
+
+---
+Part of the [RedPanda ecosystem](https://github.com/redPanda-project).
