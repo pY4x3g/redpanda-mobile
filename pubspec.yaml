@@ -45,6 +45,8 @@ dependencies:
   sqlite3_flutter_libs: ^0.5.41
   drift_flutter: ^0.2.8
   qr_flutter: ^4.1.0
+  redpanda_light_client:
+    path: packages/redpanda_light_client
 
 dev_dependencies:
   flutter_test:
@@ -60,6 +62,8 @@ dev_dependencies:
   drift_dev: ^2.30.0
   integration_test:
     sdk: flutter
+  arch_test: ^0.1.0
+  import_lint: ^0.1.6
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

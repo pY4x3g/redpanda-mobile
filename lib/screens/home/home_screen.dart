@@ -4,12 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:redpanda/database/database.dart';
 import 'package:redpanda/shared/providers.dart';
+import 'package:redpanda/shared/widgets/connection_status_badge.dart';
 import 'package:uuid/uuid.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
-  @override
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final channelsAsync = ref.watch(channelsStreamProvider);
@@ -18,6 +18,7 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text("RedPanda"),
         actions: [
+          const ConnectionStatusBadge(),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
