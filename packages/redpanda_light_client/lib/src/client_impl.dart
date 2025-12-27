@@ -41,6 +41,12 @@ class RedPandaLightClient implements RedPandaClient {
   Timer? _connectionTimer;
   ConnectionStatus _currentStatus = ConnectionStatus.disconnected;
 
+  // Backoff state
+  final Map<String, DateTime> _nextRetryTime = {};
+  final Map<String, int> _retryCounts = {};
+  static const Duration _initialBackoff = Duration(seconds: 2);
+  static const Duration _maxBackoff = Duration(minutes: 5);
+
   bool get isEncryptionActive => _peers.values.any((p) => p.isEncryptionActive);
   bool get isPongSent => _peers.values.any((p) => p.isPongSent);
 
@@ -82,6 +88,20 @@ class RedPandaLightClient implements RedPandaClient {
       if (_currentStatus != ConnectionStatus.connected) {
         _currentStatus = ConnectionStatus.connected;
         _connectionStatusController.add(ConnectionStatus.connected);
+
+        // Clear backoff for connected peers
+        // Note: The logic here is global status, but we want per-peer reset.
+        // Better to do it in the loop or listener?
+        // Actually, onStatusChange is called by specific peer.
+        // We don't have the peer address here easily unless passed.
+        // Let's modify ActivePeer to pass itself or address?
+        // Or cleaner: Iterate peers and clear for connected ones.
+        for (final entry in _peers.entries) {
+          if (entry.value.isHandshakeVerified) {
+            _nextRetryTime.remove(entry.key);
+            _retryCounts.remove(entry.key);
+          }
+        }
       }
     } else if (status == ConnectionStatus.connecting) {
       if (_currentStatus != ConnectionStatus.connected) {
@@ -144,6 +164,12 @@ class RedPandaLightClient implements RedPandaClient {
       if (_peers.containsKey(address)) {
         final peer = _peers[address]!;
         if (peer.isDisconnected) {
+          if (_nextRetryTime.containsKey(address)) {
+            if (DateTime.now().isBefore(_nextRetryTime[address]!)) {
+              // print('RedPandaLightClient: In backoff for $address. Skipping.');
+              continue;
+            }
+          }
           print(
             'RedPandaLightClient: Peer $address is disconnected. Retrying...',
           );
@@ -205,6 +231,21 @@ class RedPandaLightClient implements RedPandaClient {
         peer.connect(); // Fire and forget (it is async inside)
       } catch (e) {
         print('RedPandaLightClient: Failed to initiate peer $address: $e');
+
+        // Handle Backoff
+        final attempts = (_retryCounts[address] ?? 0) + 1;
+        _retryCounts[address] = attempts;
+
+        final delaySeconds =
+            _initialBackoff.inSeconds * (1 << (attempts - 1)); // 2^n
+        // Clamp to max
+        final delay = Duration(seconds: delaySeconds);
+        final clampedDelay = delay > _maxBackoff ? _maxBackoff : delay;
+
+        _nextRetryTime[address] = DateTime.now().add(clampedDelay);
+        print(
+          'RedPandaLightClient: Backoff for $address set to $clampedDelay (Next retry: ${_nextRetryTime[address]})',
+        );
       }
     }
   }
