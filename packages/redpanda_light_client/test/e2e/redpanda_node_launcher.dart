@@ -78,10 +78,10 @@ class RedPandaNodeLauncher {
     _process!.stdout.listen((event) => stdout.add(event));
     _process!.stderr.listen((event) => stderr.add(event));
 
-    // Wait for the port to be open (up to 15 seconds)
+    // Wait for the port to be open (up to 60 seconds)
     print('Waiting for port $port to open...');
     bool connected = false;
-    for (int i = 0; i < 30; i++) {
+    for (int i = 0; i < 120; i++) {
       try {
         final socket = await Socket.connect(
           '127.0.0.1',
@@ -97,8 +97,12 @@ class RedPandaNodeLauncher {
     }
 
     if (!connected) {
-      throw Exception('Node failed to start on port $port after 15 seconds.');
+      throw Exception('Node failed to start on port $port after 60 seconds.');
     }
+
+    // Give the node a moment to settle (initialize IDs, threads, etc.)
+    print('Port open. Waiting 2 seconds for node to settle...');
+    await Future.delayed(const Duration(seconds: 2));
 
     if (await _processIsDead()) {
       throw Exception('Node process died immediately. Check logs.');
