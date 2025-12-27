@@ -33,16 +33,22 @@ class RedPandaNodeLauncher {
     // Let's assume for this first pass we rely on default or mechanism we can inject.
     // If redPandaj doesn't support CLI port override, we might need to write a properties file.
     
-    // Attempting to run with system property override if supported, or standard args
+    // Based on ConnectionHandler.java, the app reads System.getenv("PORT")
+    final env = {'PORT': port.toString()};
+
     final args = [
-      '-Dredpanda.port=$port', // Hypothethical property
       '-jar',
       jarPath,
-      '--headless', // Hypothetical arg to avoid UI
+      // '--headless', // Not supported yet based on App.java source, but "headless" is default behavior essentially (console only)
     ];
 
     print('Starting Node on port $port...');
-    _process = await Process.start('java', args, workingDirectory: _workingDir);
+    _process = await Process.start(
+      'java', 
+      args, 
+      workingDirectory: _workingDir,
+      environment: env,
+    );
 
     // Stream output to console for debugging
     _process!.stdout.listen((event) => stdout.add(event));

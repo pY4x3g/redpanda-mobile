@@ -29,7 +29,7 @@ class ConnectionStatusBadge extends ConsumerWidget {
             break;
           case ConnectionStatus.offline:
           case ConnectionStatus.disconnected:
-            color = Colors.redAccent;
+            color = Colors.orangeAccent;
             icon = Icons.cloud_off;
             tooltip = "Offline";
             break;
