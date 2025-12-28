@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -19,7 +18,8 @@ class MockSocket implements Socket {
   MockSocket(this._remoteAddressString, this.remotePort);
 
   @override
-  InternetAddress get remoteAddress => InternetAddress(_remoteAddressString, type: InternetAddressType.IPv4);
+  InternetAddress get remoteAddress =>
+      InternetAddress(_remoteAddressString, type: InternetAddressType.IPv4);
 
   @override
   StreamSubscription<Uint8List> listen(
@@ -60,22 +60,32 @@ class MockSocket implements Socket {
 
 class MockPeerRepository implements PeerRepository {
   final Map<String, PeerStats> _peers = {};
-  
+
   @override
   Future<void> load() async {}
   @override
   Future<void> save() async {}
 
   @override
-  void updatePeer(String address, {int? latencyMs, bool? isSuccess, bool? isFailure}) {
-    final stats = _peers.putIfAbsent(address, () => PeerStats(address: address));
+  void updatePeer(
+    String address, {
+    String? nodeId,
+    int? latencyMs,
+    bool? isSuccess,
+    bool? isFailure,
+  }) {
+    final stats = _peers.putIfAbsent(
+      address,
+      () => PeerStats(address: address),
+    );
     if (latencyMs != null) stats.averageLatencyMs = latencyMs;
     // stats.successCount/failureCount logic ignored for simplicty unless needed
   }
 
   @override
   List<PeerStats> getBestPeers(int count) {
-    final sorted = _peers.values.toList()..sort((a,b) => b.score.compareTo(a.score)); // Descending score
+    final sorted = _peers.values.toList()
+      ..sort((a, b) => b.score.compareTo(a.score)); // Descending score
     return sorted.take(count).toList();
   }
 
@@ -108,17 +118,17 @@ void main() {
     late RedPandaLightClient client;
     late MockPeerRepository mockRepo;
     late List<String> socketAttempts;
-    
+
     // We mock socket factory to track attempts
     Future<Socket> mockFactory(String host, int port) async {
       socketAttempts.add('$host:$port');
       return MockSocket(host, port);
     }
-    
+
     // Factory that fails connections
     Future<Socket> failingFactory(String host, int port) async {
-       socketAttempts.add('$host:$port');
-       throw SocketException('Connection refused');
+      socketAttempts.add('$host:$port');
+      throw SocketException('Connection refused');
     }
 
     setUp(() {
@@ -153,42 +163,42 @@ void main() {
       // We expect it to try connecting to the best peers
       // Since maxConnections=5, and we have 6 peers, and logic tries top 10 candidates...
       // It should try to connect to at least 5 of them.
-      
+
       expect(socketAttempts.length, greaterThanOrEqualTo(5));
       expect(socketAttempts, contains('127.0.0.1:1001'));
       expect(socketAttempts, contains('127.0.0.1:1002'));
     });
 
     test('Max Connections: Does not exceed limit (5)', () async {
-       // Start client
-       client = RedPandaLightClient(
+      // Start client
+      client = RedPandaLightClient(
         selfNodeId: NodeId.fromPublicKey(KeyPair.generate()),
         selfKeys: KeyPair.generate(),
         peerRepository: mockRepo,
         socketFactory: mockFactory,
         seeds: [],
       );
-      
+
       await Future.delayed(Duration(milliseconds: 100)); // Let it stabilize
-      
+
       final count = await client.peerCountStream.first;
       expect(count, lessThanOrEqualTo(5));
-      
+
       // Even if we add more peers
       mockRepo.setPeerScore('127.0.0.1:2001', 10); // Super good peer
       await client.addPeer('127.0.0.1:2001');
-      
+
       await Future.delayed(Duration(milliseconds: 100));
-      
+
       final count2 = await client.peerCountStream.first;
-      expect(count2, lessThanOrEqualTo(5)); 
+      expect(count2, lessThanOrEqualTo(5));
     });
 
     test('Core Preference: Prefers low latency peers', () async {
-       // We have 6 peers in repo. 1001-1005 are good (low latency), 1006 is bad (900ms).
-       // We start client. It should eventually drop 1006 if it connected to it, or strictly pick 1001-1005.
-       
-       client = RedPandaLightClient(
+      // We have 6 peers in repo. 1001-1005 are good (low latency), 1006 is bad (900ms).
+      // We start client. It should eventually drop 1006 if it connected to it, or strictly pick 1001-1005.
+
+      client = RedPandaLightClient(
         selfNodeId: NodeId.fromPublicKey(KeyPair.generate()),
         selfKeys: KeyPair.generate(),
         peerRepository: mockRepo,
@@ -196,34 +206,37 @@ void main() {
         seeds: [],
       );
 
-       await Future.delayed(Duration(milliseconds: 200));
+      await Future.delayed(Duration(milliseconds: 200));
 
-       // We access the repo to see usage or check internal state if we could.
-       // Instead, checking socket attempts isn't enough as it shows history.
-       // We can infer preference by who is NOT connected if we could simulate handshake success.
-       // But MockSocket here doesn't complete handshake, so 'peerCount' will be 0 verified.
-       // The 'ActivePeer' list will be full of unverified peers.
-       // Logic sorts by latency for culling.
-       
-       // Verification:
-       // The 'toConnect' loop picks candidates from 'getBestPeers'.
-       // 'getBestPeers' returns sorted list.
-       // So it should pick 1001-1005 first.
-       
-       expect(socketAttempts, contains('127.0.0.1:1001'));
-       expect(socketAttempts, isNot(contains('127.0.0.1:1006'))); // Should skip the worst one if slots filled by better ones
+      // We access the repo to see usage or check internal state if we could.
+      // Instead, checking socket attempts isn't enough as it shows history.
+      // We can infer preference by who is NOT connected if we could simulate handshake success.
+      // But MockSocket here doesn't complete handshake, so 'peerCount' will be 0 verified.
+      // The 'ActivePeer' list will be full of unverified peers.
+      // Logic sorts by latency for culling.
+
+      // Verification:
+      // The 'toConnect' loop picks candidates from 'getBestPeers'.
+      // 'getBestPeers' returns sorted list.
+      // So it should pick 1001-1005 first.
+
+      expect(socketAttempts, contains('127.0.0.1:1001'));
+      expect(
+        socketAttempts,
+        isNot(contains('127.0.0.1:1006')),
+      ); // Should skip the worst one if slots filled by better ones
     });
 
     test('Bad Internet: Stops trying if all connections fail', () async {
-       // Use failing factory
-       client = RedPandaLightClient(
+      // Use failing factory
+      client = RedPandaLightClient(
         selfNodeId: NodeId.fromPublicKey(KeyPair.generate()),
         selfKeys: KeyPair.generate(),
         peerRepository: mockRepo,
         socketFactory: failingFactory,
         seeds: [],
       );
-      
+
       // Initial burst
       await Future.delayed(Duration(milliseconds: 100));
       final initialAttempts = socketAttempts.length;
@@ -232,21 +245,21 @@ void main() {
       // Wait for timer tick (3s)
       // If bad internet detected, it should throttle (wait 10s).
       // So between T+100ms and T+4000ms, there should be NO new attempts.
-      
+
       await Future.delayed(Duration(milliseconds: 3100));
-      
+
       // If logic works: failure -> sets _isBadInternetDetected -> next check (3s later) -> sees flag -> checks time -> returns early.
       // So counts should be same.
-      
+
       expect(socketAttempts.length, equals(initialAttempts));
     });
 
     test('Backoff: Does not retry failed peer immediately', () async {
-       // Setup repo with just 1 peer
-       mockRepo = MockPeerRepository();
-       mockRepo.setPeerScore('127.0.0.1:9999', 50);
+      // Setup repo with just 1 peer
+      mockRepo = MockPeerRepository();
+      mockRepo.setPeerScore('127.0.0.1:9999', 50);
 
-       client = RedPandaLightClient(
+      client = RedPandaLightClient(
         selfNodeId: NodeId.fromPublicKey(KeyPair.generate()),
         selfKeys: KeyPair.generate(),
         peerRepository: mockRepo,
@@ -262,7 +275,7 @@ void main() {
       // We rely on Timer (3s).
       // Backoff is 10s.
       // So at 3s, it should NOT retry.
-      
+
       await Future.delayed(Duration(milliseconds: 3100));
       expect(socketAttempts.length, 1); // Still 1
 

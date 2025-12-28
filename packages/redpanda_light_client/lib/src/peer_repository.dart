@@ -1,4 +1,3 @@
-
 import 'package:redpanda_light_client/src/models/peer_stats.dart';
 
 /// Abstract interface for peer persistence.
@@ -10,7 +9,8 @@ abstract class PeerRepository {
   Future<void> save();
 
   /// Updates or adds a peer stat.
-  void updatePeer(String address, {
+  void updatePeer(
+    String address, {
     String? nodeId,
     int? latencyMs,
     bool? isSuccess,
@@ -25,7 +25,7 @@ abstract class PeerRepository {
 
   /// Adds a list of known addresses (seeds or discovered).
   void addAll(Iterable<String> addresses);
-  
+
   /// Helper to get stats for a specific peer
   PeerStats? getPeer(String address);
 }
@@ -41,10 +41,16 @@ class InMemoryPeerRepository implements PeerRepository {
   Future<void> save() async {}
 
   @override
-  void updatePeer(String address, {String? nodeId, int? latencyMs, bool? isSuccess, bool? isFailure}) {
+  void updatePeer(
+    String address, {
+    String? nodeId,
+    int? latencyMs,
+    bool? isSuccess,
+    bool? isFailure,
+  }) {
     final stats = _peers.putIfAbsent(
-        address, 
-        () => PeerStats(address: address, lastSeen: DateTime.now())
+      address,
+      () => PeerStats(address: address, lastSeen: DateTime.now()),
     );
 
     if (nodeId != null) {
@@ -55,7 +61,8 @@ class InMemoryPeerRepository implements PeerRepository {
       if (stats.averageLatencyMs == 9999) {
         stats.averageLatencyMs = latencyMs;
       } else {
-        stats.averageLatencyMs = (stats.averageLatencyMs * 0.7 + latencyMs * 0.3).round();
+        stats.averageLatencyMs =
+            (stats.averageLatencyMs * 0.7 + latencyMs * 0.3).round();
       }
     }
 

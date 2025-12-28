@@ -1,4 +1,3 @@
-
 import 'package:drift/drift.dart';
 import 'package:redpanda/database/database.dart';
 import 'package:redpanda_light_client/redpanda_light_client.dart';
@@ -8,26 +7,34 @@ class DriftPeerRepository implements PeerRepository {
 
   DriftPeerRepository(this.db);
 
-
   @override
   Future<void> save() async {
     // DB is auto-save
   }
 
   @override
-  void updatePeer(String address, {String? nodeId, int? latencyMs, bool? isSuccess, bool? isFailure}) async {
+  void updatePeer(
+    String address, {
+    String? nodeId,
+    int? latencyMs,
+    bool? isSuccess,
+    bool? isFailure,
+  }) async {
     // Fetch existing or Create
     // In Drift we can use insertOnConflictUpdate
-    
+
     // We need to read current first to update averages properly or use SQL
     // Simple approach: Read, Modify, Write
     try {
-      final existing = await (db.select(db.peers)..where((t) => t.address.equals(address))).getSingleOrNull();
-      
+      final existing = await (db.select(
+        db.peers,
+      )..where((t) => t.address.equals(address))).getSingleOrNull();
+
       var newAverage = existing?.averageLatencyMs ?? 9999;
       var newSuccess = existing?.successCount ?? 0;
       var newFailure = existing?.failureCount ?? 0;
-      var newNodeId = nodeId ?? existing?.nodeId; // Keep existing if not provided
+      var newNodeId =
+          nodeId ?? existing?.nodeId; // Keep existing if not provided
       final now = DateTime.now();
 
       if (latencyMs != null) {
@@ -57,16 +64,18 @@ class DriftPeerRepository implements PeerRepository {
       // Update Cache
       _cache[address] = updatedStats;
 
-      await db.into(db.peers).insertOnConflictUpdate(
-        PeersCompanion(
-          address: Value(address),
-          nodeId: Value(newNodeId), // Insert or Update NodeId
-          averageLatencyMs: Value(newAverage),
-          successCount: Value(newSuccess),
-          failureCount: Value(newFailure),
-          lastSeen: Value(now),
-        ),
-      );
+      await db
+          .into(db.peers)
+          .insertOnConflictUpdate(
+            PeersCompanion(
+              address: Value(address),
+              nodeId: Value(newNodeId), // Insert or Update NodeId
+              averageLatencyMs: Value(newAverage),
+              successCount: Value(newSuccess),
+              failureCount: Value(newFailure),
+              lastSeen: Value(now),
+            ),
+          );
     } catch (e) {
       print('DriftPeerRepository: Error updating peer $address: $e');
     }
@@ -79,7 +88,7 @@ class DriftPeerRepository implements PeerRepository {
       ..sort((a, b) => b.score.compareTo(a.score));
     return sorted.take(count).toList();
   }
-  
+
   final Map<String, PeerStats> _cache = {};
 
   @override
@@ -87,18 +96,18 @@ class DriftPeerRepository implements PeerRepository {
 
   @override
   void addAll(Iterable<String> addresses) {
-     for (final addr in addresses) {
-       if (!_cache.containsKey(addr)) {
-         updatePeer(addr); 
-         // Optimistically add to cache
-         _cache[addr] = PeerStats(address: addr);
-       }
-     }
+    for (final addr in addresses) {
+      if (!_cache.containsKey(addr)) {
+        updatePeer(addr);
+        // Optimistically add to cache
+        _cache[addr] = PeerStats(address: addr);
+      }
+    }
   }
 
   @override
   PeerStats? getPeer(String address) => _cache[address];
-  
+
   // Custom load to fill cache
   @override
   Future<void> load() async {

@@ -21,11 +21,9 @@ class _MyAppState extends ConsumerState<MyApp> {
     super.initState();
     // Synchronous connection trigger (KeyPair gen is now fast)
     ref.read(redPandaClientProvider).connect();
-    
+
     // Lifecycle listener
-    _lifecycleListener = AppLifecycleListener(
-      onStateChange: _onStateChanged,
-    );
+    _lifecycleListener = AppLifecycleListener(onStateChange: _onStateChanged);
   }
 
   late final AppLifecycleListener _lifecycleListener;
@@ -34,12 +32,13 @@ class _MyAppState extends ConsumerState<MyApp> {
     // Only works if client is actually RedPandaLightClient
     final client = ref.read(redPandaClientProvider);
     if (client is RedPandaLightClient) {
-      if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      if (state == AppLifecycleState.paused ||
+          state == AppLifecycleState.detached) {
         print('App Paused. Saving state.');
         client.onPause();
       } else if (state == AppLifecycleState.resumed) {
-         print('App Resumed. Creating connection check.');
-         client.onResume();
+        print('App Resumed. Creating connection check.');
+        client.onResume();
       }
     }
   }

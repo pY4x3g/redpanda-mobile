@@ -42,7 +42,8 @@ class Messages extends Table {
 class Peers extends Table {
   TextColumn get address => text().unique()();
   TextColumn get nodeId => text().nullable()();
-  IntColumn get averageLatencyMs => integer().withDefault(const Constant(9999))();
+  IntColumn get averageLatencyMs =>
+      integer().withDefault(const Constant(9999))();
   IntColumn get successCount => integer().withDefault(const Constant(0))();
   IntColumn get failureCount => integer().withDefault(const Constant(0))();
   DateTimeColumn get lastSeen => dateTime().nullable()();
