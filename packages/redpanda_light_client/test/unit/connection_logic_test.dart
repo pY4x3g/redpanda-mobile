@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:test/test.dart';
 import 'package:redpanda_light_client/redpanda_light_client.dart';
-import 'package:redpanda_light_client/src/peer_repository.dart';
 
 // --- Mocks ---
 

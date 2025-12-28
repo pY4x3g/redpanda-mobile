@@ -51,7 +51,7 @@ class RedPandaLightClient implements RedPandaClient {
   static const Duration backoffDuration = Duration(seconds: 10);
 
   // State for mobile Optimization
-  bool _isBackgrounded = false; // To be set by flutter lifecycle
+  // bool _isBackgrounded = false; // To be set by flutter lifecycle
   bool _isBadInternetDetected = false;
   DateTime _lastGlobalConnectionAttempt = DateTime.fromMillisecondsSinceEpoch(
     0,
@@ -61,8 +61,8 @@ class RedPandaLightClient implements RedPandaClient {
   final Map<String, DateTime> _nextRetryTime = {};
   final Map<String, int> _retryCounts = {}; // Restored
   final Set<String> _intentionalDisconnects = {};
-  static const Duration _initialBackoff = Duration(seconds: 2);
-  static const Duration _maxBackoff = Duration(minutes: 5);
+  // static const Duration _initialBackoff = Duration(seconds: 2);
+  // static const Duration _maxBackoff = Duration(minutes: 5);
 
   bool get isEncryptionActive => _peers.values.any((p) => p.isEncryptionActive);
   bool get isPongSent => _peers.values.any((p) => p.isPongSent);
@@ -85,7 +85,7 @@ class RedPandaLightClient implements RedPandaClient {
 
   /// Called when app goes to background
   void onPause() {
-    _isBackgrounded = true;
+    // _isBackgrounded = true;
     _peerRepository.save();
     // Maybe reduce timer frequency?
     _connectionTimer?.cancel();
@@ -97,7 +97,7 @@ class RedPandaLightClient implements RedPandaClient {
 
   /// Called when app resumes
   void onResume() {
-    _isBackgrounded = false;
+    // _isBackgrounded = false;
     _isBadInternetDetected = false; // transform optimism
     _connectionTimer?.cancel();
     _connectionTimer = Timer.periodic(
@@ -428,7 +428,7 @@ class RedPandaLightClient implements RedPandaClient {
 
   void _handleBackoff(String address) {
     // Simple exponential backoff
-    int currentDelay = 5;
+    // int currentDelay = 5;
     if (_nextRetryTime.containsKey(address)) {
       // If we just failed, and we were already in backoff cycle (implied), increase
       // But here we usually clear backoff on success.
@@ -450,7 +450,9 @@ class RedPandaLightClient implements RedPandaClient {
           for (final addr in lookup) {
             connectedIps.add('${addr.address}:${parts[1]}');
           }
-        } catch (e) {}
+        } catch (e) {
+          // Ignore lookup errors
+        }
       }
     }
     return connectedIps;
