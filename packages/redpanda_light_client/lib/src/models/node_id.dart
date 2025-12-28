@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:bs58/bs58.dart';
 import 'package:equatable/equatable.dart';
 import 'package:hex/hex.dart';
 import 'package:pointycastle/export.dart';
@@ -34,7 +35,15 @@ class NodeId extends Equatable {
     return NodeId(hash.sublist(0, length));
   }
 
+  factory NodeId.fromPublicKeyBytes(Uint8List pubKeyBytes) {
+    final digest = SHA256Digest();
+    final hash = digest.process(pubKeyBytes);
+    return NodeId(hash.sublist(0, length));
+  }
+
   String toHex() => HEX.encode(bytes);
+
+  String toBase58() => base58.encode(bytes);
 
   @override
   List<Object> get props => [bytes];

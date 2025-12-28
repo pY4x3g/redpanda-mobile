@@ -11,6 +11,8 @@ import 'package:redpanda_light_client/src/models/connection_status.dart';
 import 'package:redpanda_light_client/src/models/key_pair.dart';
 import 'package:redpanda_light_client/src/models/node_id.dart';
 import 'package:redpanda_light_client/src/generated/commands.pb.dart';
+import 'package:redpanda_light_client/src/peer_repository.dart';
+import 'package:redpanda_light_client/src/models/peer_stats.dart';
 
 /// The implementation of the RedPanda Light Client.
 /// Manages network connections, encryption, and routing.
@@ -36,14 +38,27 @@ class RedPandaLightClient implements RedPandaClient {
   ];
 
   final SocketFactory _socketFactory;
-  final Set<String> _knownAddresses = {};
+  // final Set<String> _knownAddresses = {}; // Replaced by PeerRepository
+  final PeerRepository _peerRepository;
   final Map<String, ActivePeer> _peers = {};
   Timer? _connectionTimer;
   ConnectionStatus _currentStatus = ConnectionStatus.disconnected;
 
+  // Configuration
+  static const int maxConnections = 5;
+  static const int coreSlots = 3;
+  static const int roamingSlots = 2;
+  static const Duration backoffDuration = Duration(seconds: 10);
+  
+  // State for mobile Optimization
+  bool _isBackgrounded = false; // To be set by flutter lifecycle
+  bool _isBadInternetDetected = false;
+  DateTime _lastGlobalConnectionAttempt = DateTime.fromMillisecondsSinceEpoch(0);
+
   // Backoff state
   final Map<String, DateTime> _nextRetryTime = {};
-  final Map<String, int> _retryCounts = {};
+  final Map<String, int> _retryCounts = {}; // Restored
+  final Set<String> _intentionalDisconnects = {};
   static const Duration _initialBackoff = Duration(seconds: 2);
   static const Duration _maxBackoff = Duration(minutes: 5);
 
@@ -55,8 +70,33 @@ class RedPandaLightClient implements RedPandaClient {
     required this.selfKeys,
     List<String> seeds = defaultSeeds,
     SocketFactory? socketFactory,
-  }) : _socketFactory = socketFactory ?? ((h, p) => Socket.connect(h, p)) {
-    _knownAddresses.addAll(seeds);
+    // Injectable repository for testing? For now we create it.
+    PeerRepository? peerRepository,
+  }) : _socketFactory = socketFactory ?? ((h, p) => Socket.connect(h, p)),
+       _peerRepository = peerRepository ?? InMemoryPeerRepository() {
+    _peerRepository.load().then((_) {
+      _peerRepository.addAll(seeds);
+      // Fast boot: Trigger immediate check after load
+      _runConnectionCheck(); 
+    });
+  }
+
+  /// Called when app goes to background
+  void onPause() {
+    _isBackgrounded = true;
+    _peerRepository.save();
+    // Maybe reduce timer frequency?
+    _connectionTimer?.cancel();
+    _connectionTimer = Timer.periodic(const Duration(seconds: 30), (_) => _runConnectionCheck());
+  }
+
+  /// Called when app resumes
+  void onResume() {
+    _isBackgrounded = false;
+    _isBadInternetDetected = false; // transform optimism
+     _connectionTimer?.cancel();
+    _connectionTimer = Timer.periodic(const Duration(seconds: 3), (_) => _runConnectionCheck());
+    _runConnectionCheck(); // Immediate
   }
 
   @override
@@ -69,6 +109,17 @@ class RedPandaLightClient implements RedPandaClient {
   Stream<int> get peerCountStream async* {
     yield _peers.values.where((p) => p.isHandshakeVerified).length;
     yield* _peerCountController.stream;
+  }
+
+  /// PROVISIONAL: Stream of currently connected peer addresses.
+  Stream<List<String>> get activePeersStream async* {
+    yield _peers.values.where((p) => p.isHandshakeVerified).map((p) => p.address).toList();
+    // We reuse the peerCount controller to signal updates for now? 
+    // Or we need a new controller.
+    // Let's create a new controller or just reuse peerCount logic as a trigger.
+    await for (final _ in _peerCountController.stream) {
+      yield _peers.values.where((p) => p.isHandshakeVerified).map((p) => p.address).toList();
+    }
   }
 
   void _updateStatus(ConnectionStatus status) {
@@ -135,184 +186,253 @@ class RedPandaLightClient implements RedPandaClient {
   }
 
   Future<void> _runConnectionCheck() async {
+    // 0. If bad internet detected, throttle
+    if (_isBadInternetDetected) {
+      if (DateTime.now().difference(_lastGlobalConnectionAttempt).inSeconds < 10) {
+        return; // Wait 10s before trying again if we think logic is bad
+      }
+      _isBadInternetDetected = false; // Reset and try again
+    }
+    _lastGlobalConnectionAttempt = DateTime.now();
+
     print(
-      'RedPandaLightClient: Running connection check on ${_knownAddresses.length} addresses.',
+      'RedPandaLightClient: Running connection check. Known peers: ${_peerRepository.knownAddresses.length}',
     );
 
-    // Resolve all connected peers to their IPs for deduplication
-    final connectedIps = <String>{};
-    for (final peer in _peers.values) {
-      if (!peer.isDisconnected) {
-        // We can't easily get the resolved IP of an active socket exposed via ActivePeer if strict encapsulation.
-        // But we can try to resolve the *configured* address of the peer.
-        try {
-          final parts = peer.address.split(':');
-          final host = parts[0];
-          // For simplicity, we re-resolve. Optimized way would be to store resolved IP on peer.
-          // NOTE: 'localhost' might resolve to multiple (ipv4/ipv6). We check if ANY match.
-          final lookup = await InternetAddress.lookup(host);
-          for (final addr in lookup) {
-            connectedIps.add('${addr.address}:${parts[1]}');
-          }
-        } catch (e) {
-          // ignore
-        }
+    // 1. Cleanup disconnected
+    _peers.removeWhere((address, peer) {
+      if (peer.isDisconnected) {
+        print('RedPandaLightClient: Removing disconnected peer $address');
+        return true;
       }
+      // Also ping active peers periodically
+      if (peer.isHandshakeVerified) {
+         // If hasn't pinged in 10s, ping
+         // We can do this based on timer or here
+         peer.ping();
+      }
+      return false;
+    });
+
+    // 2. Classify Current Peers
+    // A. Verify Capacity
+    if (_peers.length > maxConnections) {
+        // Disconnect worst performing extra peers
+        final sortedParams = _peers.values.toList()
+          ..sort((a, b) => a.averageLatencyMs.compareTo(b.averageLatencyMs)); // Lower latency first
+        
+        // Remove active peers that are worst
+        for (var i = maxConnections; i < sortedParams.length; i++) {
+           print('RedPandaLightClient: Over capacity. Disconnecting ${sortedParams[i].address}');
+           sortedParams[i].disconnect();
+        }
     }
 
-    for (final address in _knownAddresses) {
-      // Check backoff first
-      if (_nextRetryTime.containsKey(address)) {
-        if (DateTime.now().isBefore(_nextRetryTime[address]!)) {
-          // print('RedPandaLightClient: In backoff for $address. Skipping.');
-          continue;
-        }
+    // B. Rotate Roaming Peers
+    // B. Rotate Roaming Peers
+    final best3 = _peerRepository.getBestPeers(3).map((p) => p.address).toSet();
+    final connectedRoaming = _peers.values
+        .where((p) => p.isHandshakeVerified && !best3.contains(p.address))
+        .toList();
+
+    if (connectedRoaming.length >= 2) {
+      // Find candidates for rotation (Age > 10s)
+      final candidates = connectedRoaming.where((p) {
+         final age = DateTime.now().difference(p.connectedSince).inSeconds;
+         // print('DEBUG: Rotation Candidate: ${p.address} Age=${age}s');
+         return age >= 10;
+      }).toList();
+
+      // Disconnect ONLY ONE (the oldest)
+      if (candidates.isNotEmpty) {
+          candidates.sort((a, b) => a.connectedSince.compareTo(b.connectedSince)); // Oldest first
+          final victim = candidates.first;
+          final age = DateTime.now().difference(victim.connectedSince).inSeconds;
+          
+          print('RedPandaLightClient: Rotating ONE roaming peer ${victim.address} (Connected ${age}s). Keeping others.');
+          _intentionalDisconnects.add(victim.address);
+          victim.disconnect();
       }
+    }
+    
+    // 3. Slot Filling
+    // Identify Best Candidates from Repository
+    // Strategy: Reserve 3 slots for Core (Best), 2 for Roaming (Random/New)
+    final int targetCore = 3; 
 
-      if (_peers.containsKey(address)) {
-        final peer = _peers[address]!;
-        if (peer.isDisconnected) {
-          print(
-            'RedPandaLightClient: Peer $address is disconnected. Retrying...',
-          );
-          _peers.remove(address);
-        } else {
-          continue; // Already connected or connecting
+    final candidates = _peerRepository.getBestPeers(10);
+    int connectedCount = _peers.length;
+    
+    final toConnect = <String>[];
+    
+    // A. CORE: Fill up to targetCore with Best Peers
+    for (final candidate in candidates) {
+        if (connectedCount >= maxConnections) break; // Hard limit
+        if (connectedCount >= targetCore && _peers.length >= targetCore) {
+           // If we already have enough core-like connections, stop filling from top list
+           // Note: _peers.length includes current connections. We need to be careful not to count roaming as core?
+           // Actually, we just want to ensure we don't fill ALL slots with candidates.
+           // We break if we have reached the "Core" saturation for this loop.
+           break; 
         }
-      }
 
-      // Check if we are already connected to this target via another alias
-      try {
-        final parts = address.split(':');
-        final host = parts[0];
-        final port = parts[1];
-        final lookup = await InternetAddress.lookup(host);
-
-        bool alreadyConnected = false;
-        for (final addr in lookup) {
-          if (connectedIps.contains('${addr.address}:$port')) {
-            alreadyConnected = true;
-            break;
+        if (!_peers.containsKey(candidate.address)) {
+             // Check backoff
+             if (_nextRetryTime.containsKey(candidate.address)) {
+                if (DateTime.now().isBefore(_nextRetryTime[candidate.address]!)) {
+                  continue; 
+                }
+             }
+             toConnect.add(candidate.address);
+             connectedCount++;
+        }
+    }
+    
+    // Random filling if we still have space (Roaming)
+    if (connectedCount < maxConnections) {
+       final all = _peerRepository.knownAddresses.toList()..shuffle();
+       for (final addr in all) {
+          if (connectedCount >= maxConnections) break;
+          if (!_peers.containsKey(addr) && !toConnect.contains(addr)) {
+               // Check backoff
+               if (_waitInBackoff(addr)) continue;
+               toConnect.add(addr);
+               connectedCount++;
           }
-        }
+       }
+    }
 
-        if (alreadyConnected) {
-          print(
-            'RedPandaLightClient: Skipping $address (Already connected via alias).',
-          );
-          continue;
-        }
-      } catch (e) {
-        print('RedPandaLightClient: DNS resolution failed for $address: $e');
-        // Fallthrough: Try to connect anyway? Or skip?
-        // If we can't resolve, connect call will likely fail too.
-      }
+    if (toConnect.isEmpty && _peers.isEmpty) {
+       if (_peerRepository.knownAddresses.isNotEmpty) {
+         print('RedPandaLightClient: No peers to connect to. Bad Internet?');
+         _isBadInternetDetected = true;
+       }
+       return;
+    }
 
-      // Start new connection
+    // 4. Connect
+    // Resolve Deduplication done in ActivePeer or before connect?
+    // We do simplified resolve check here
+    final connectedIps = await _resolveConnectedIps();
+
+    for (final address in toConnect) {
       try {
+       if (await _isAliasOfConnected(address, connectedIps)) {
+           continue; 
+        }
+        
         final peer = ActivePeer(
           address: address,
           selfNodeId: selfNodeId,
           selfKeys: selfKeys,
           socketFactory: _socketFactory,
           onStatusChange: _updateStatus,
+          onNodeIdDiscovered: (nodeId) {
+             _peerRepository.updatePeer(address, nodeId: nodeId);
+          },
           onDisconnect: () {
-            // Handle Backoff on disconnect
-            // We increment retry count here.
-            // Note: success clears it in _updateStatus.
-
-            final attempts = (_retryCounts[address] ?? 0) + 1;
-            _retryCounts[address] = attempts;
-
-            final delaySeconds =
-                _initialBackoff.inSeconds * (1 << (attempts - 1)); // 2^n
-            // Clamp to max
-            final delay = Duration(seconds: delaySeconds);
-            final clampedDelay = delay > _maxBackoff ? _maxBackoff : delay;
-
-            _nextRetryTime[address] = DateTime.now().add(clampedDelay);
-            print(
-              'RedPandaLightClient: Disconnected $address. Backoff set to $clampedDelay',
-            );
+            if (_intentionalDisconnects.contains(address)) {
+               print('RedPandaLightClient: Peer $address disconnected intentionally (Rotation). No failure recorded.');
+               _intentionalDisconnects.remove(address);
+               _handleBackoff(address); // Still backoff to ensure we rotate
+            } else {
+               _peerRepository.updatePeer(address, isFailure: true);
+               _handleBackoff(address);
+            }
           },
           onPeersReceived: (peers) {
             print(
               'RedPandaLightClient: Received ${peers.length} peers from $address',
             );
-            for (final p in peers) {
-              addPeer(p);
-            }
+            _peerRepository.addAll(peers);
+            // Trigger check to potentially fill slots immediately?
+            // _runConnectionCheck();
           },
           onPeerListRequested: () {
-            // Return known addresses to share
-            // We filter out the requestor's address if possible (ActivePeer knows it)
-            return _knownAddresses.toList();
+             // Return top 20 best peers to share
+             return _peerRepository.getBestPeers(20).map((p) => p.address).toList();
           },
+          onHandshakeComplete: () {
+             _peerRepository.updatePeer(address, isSuccess: true);
+             // Clear backoff
+             _nextRetryTime.remove(address);
+          },
+          onLatencyUpdate: (latency) {
+             _peerRepository.updatePeer(address, latencyMs: latency, isSuccess: true);
+          }
         );
         _peers[address] = peer;
         peer.connect(); // Fire and forget (it is async inside)
       } catch (e) {
         print('RedPandaLightClient: Failed to initiate peer $address: $e');
+        _peerRepository.updatePeer(address, isFailure: true);
       }
     }
+  }
+
+  // --- Helper Methods ---
+  
+  bool _waitInBackoff(String address) {
+      if (_nextRetryTime.containsKey(address)) {
+        if (DateTime.now().isBefore(_nextRetryTime[address]!)) {
+          return true;
+        }
+      }
+      return false;
+  }
+  
+  void _handleBackoff(String address) {
+       // Simple exponential backoff
+       int currentDelay = 5;
+       if (_nextRetryTime.containsKey(address)) {
+           // If we just failed, and we were already in backoff cycle (implied), increase
+           // But here we usually clear backoff on success.
+           // Let's just set a standard backoff for now.
+       }
+       _nextRetryTime[address] = DateTime.now().add(Duration(seconds: 10)); // simple fixed for now
+  }
+
+  Future<Set<String>> _resolveConnectedIps() async {
+    final connectedIps = <String>{};
+    for (final peer in _peers.values) {
+      if (!peer.isDisconnected) {
+         try {
+          final parts = peer.address.split(':');
+          final host = parts[0];
+          final lookup = await InternetAddress.lookup(host);
+          for (final addr in lookup) {
+            connectedIps.add('${addr.address}:${parts[1]}');
+          }
+        } catch (e) {}
+      }
+    }
+    return connectedIps;
+  }
+
+  Future<bool> _isAliasOfConnected(String address, Set<String> connectedIps) async {
+      try {
+        final parts = address.split(':');
+        final host = parts[0];
+        final port = parts[1];
+        final lookup = await InternetAddress.lookup(host);
+        
+        for (final addr in lookup) {
+          if (connectedIps.contains('${addr.address}:$port')) {
+            return true;
+          }
+        }
+      } catch (e) {
+        // resolution failed
+      }
+      return false;
   }
 
   @override
   Future<void> addPeer(String address) async {
-    if (_knownAddresses.contains(address)) {
-      return;
-    }
-
-    // Strict deduplication: Check if we are already connected to this peer via an alias
-    try {
-      final parts = address.split(':');
-      if (parts.length != 2) return; // Invalid format
-
-      final host = parts[0];
-      final port = parts[1];
-
-      final newPeerIps = await InternetAddress.lookup(host);
-
-      // Check active peers
-      for (final peer in _peers.values) {
-        if (peer.isDisconnected) continue;
-
-        try {
-          final peerParts = peer.address.split(':');
-          final peerHost = peerParts[0];
-          // Check port match first
-          if (peerParts[1] != port) continue;
-
-          // Resolve peer host
-          final peerIps = await InternetAddress.lookup(peerHost);
-
-          // Intersection check
-          for (final newIp in newPeerIps) {
-            for (final peerIp in peerIps) {
-              if (newIp.address == peerIp.address) {
-                print(
-                  'RedPandaLightClient: duplicate addPeer denied: $address resolves to same IP (${newIp.address}) as connected peer ${peer.address}',
-                );
-                return; // Duplicate found, reject
-              }
-            }
-          }
-        } catch (e) {
-          // Ignore resolution errors for peers
-        }
-      }
-    } catch (e) {
-      print('RedPandaLightClient: Error resolving $address during addPeer: $e');
-      // On error, maybe we allow it? or reject?
-      // If we can't resolve it, we can't connect anyway likely. But safe to add?
-      // Let's add it if resolution fails, logic below handles connecting.
-    }
-
-    print('RedPandaLightClient: Adding new peer $address');
-    _knownAddresses.add(address);
-    // Trigger immediate check or let the timer handle it?
-    // Timer handles it.
+    _peerRepository.updatePeer(address);
+    _runConnectionCheck();
   }
+
 
   @override
   Future<void> disconnect() async {
@@ -331,6 +451,11 @@ class RedPandaLightClient implements RedPandaClient {
       "sendMessage not implemented in RealRedPandaClient yet",
     );
   }
+
+  /// DEBUG ONLY: Get current peer stats
+  List<PeerStats> getDebugPeerStats() {
+    return _peerRepository.getBestPeers(100);
+  }
 }
 
 /// Represents a single active connection attempt or established connection.
@@ -347,6 +472,13 @@ class ActivePeer {
   static const int _cmdPong = 6;
   static const int _cmdRequestPeerList = 7;
   static const int _cmdSendPeerList = 8;
+  static const int _cmdUpdateRequestTimestamp = 9;
+  static const int _cmdAndroidUpdateRequestTimestamp = 13;
+  static const int _cmdKademliaStore = 120;
+  static const int _cmdKademliaGet = 121;
+  static const int _cmdKademliaGetAnswer = 122;
+  static const int _cmdJobAck = 130;
+  static const int _cmdFlaschenpostPut = 141;
 
   final String address;
   final NodeId selfNodeId;
@@ -355,7 +487,10 @@ class ActivePeer {
   final void Function(ConnectionStatus) onStatusChange;
   final void Function() onDisconnect;
   final void Function(List<String>)? onPeersReceived;
+  final void Function(int latencyMs)? onLatencyUpdate;
+  final void Function()? onHandshakeComplete;
   final List<String> Function()? onPeerListRequested;
+  final void Function(String nodeId)? onNodeIdDiscovered;
 
   Socket? _socket;
   final List<int> _buffer = [];
@@ -365,6 +500,11 @@ class ActivePeer {
   Future<void>? _handshakeInitiationFuture;
 
   final EncryptionManager _encryptionManager = EncryptionManager();
+  
+  // Stats
+  final DateTime connectedSince = DateTime.now();
+  int averageLatencyMs = 9999;
+  Stopwatch? _pingStopwatch;
 
   bool get isEncryptionActive => _encryptionManager.isEncryptionActive;
   bool get isPongSent => _pongSent;
@@ -386,6 +526,9 @@ class ActivePeer {
     required this.onDisconnect,
     this.onPeersReceived,
     this.onPeerListRequested,
+    this.onLatencyUpdate,
+    this.onHandshakeComplete,
+    this.onNodeIdDiscovered,
   });
 
   Future<void> connect() async {
@@ -437,7 +580,7 @@ class ActivePeer {
     final buffer = BytesBuilder();
     buffer.add(_magic.codeUnits);
     buffer.addByte(_protocolVersion);
-    buffer.addByte(1); // 1 = isLightClient
+    buffer.addByte(160); // 160 = isLightClient / Mobile Client
     buffer.add(selfNodeId.bytes);
     final portData = ByteData(4);
     portData.setInt32(0, 0, Endian.big);
@@ -517,6 +660,12 @@ class ActivePeer {
             _sendPong();
           } else if (command == _cmdPong) {
             print('ActivePeer($address): Received pong (Encrypted).');
+            if (_pingStopwatch != null) {
+              _pingStopwatch!.stop();
+              final latency = _pingStopwatch!.elapsedMilliseconds;
+              _updateLatency(latency);
+              _pingStopwatch = null;
+            }
             _buffer.removeAt(0);
           } else if (command == _cmdRequestPeerList) {
             print('ActivePeer($address): Received requestPeerList');
@@ -546,6 +695,33 @@ class ActivePeer {
             final payload = _buffer.sublist(0, length);
             _handlePeerList(payload);
             _buffer.removeRange(0, length);
+          } else if (command == _cmdUpdateRequestTimestamp ||
+              command == _cmdAndroidUpdateRequestTimestamp) {
+            // These commands are 1-byte queries (no payload). just consume them.
+            // print('ActivePeer($address): Received update timestamp request ($command). Ignoring.');
+            _buffer.removeAt(0);
+          } else if (command == _cmdKademliaGet ||
+              command == _cmdKademliaStore ||
+              command == _cmdKademliaGetAnswer ||
+              command == _cmdJobAck ||
+              command == _cmdFlaschenpostPut) {
+            // These commands all follow the pattern: [CMD] [Length: 4 bytes] [Protobuf Data]
+            if (_buffer.length < 1 + 4) {
+              break; // wait for length
+            }
+            final lengthData = Uint8List.fromList(_buffer.sublist(1, 5));
+            final length =
+                ByteData.view(lengthData.buffer).getInt32(0, Endian.big);
+
+            if (_buffer.length < 1 + 4 + length) {
+              break; // wait for full payload
+            }
+            
+            // print('ActivePeer($address): Ignored command $command with payload ($length bytes).');
+            
+            _buffer.removeAt(0); // Remove Command
+            _buffer.removeRange(0, 4); // Remove Length
+            _buffer.removeRange(0, length); // Remove Payload
           } else {
             print(
               'ActivePeer($address): Unknown command byte: $command. Discarding.',
@@ -575,6 +751,7 @@ class ActivePeer {
     print('ActivePeer($address): Handshake Verified.');
     _handshakeVerified = true;
     onStatusChange(ConnectionStatus.connected); // Notify manager
+    onHandshakeComplete?.call();
 
     _buffer.removeRange(0, _handshakeLength);
 
@@ -598,6 +775,9 @@ class ActivePeer {
     final point = curve.decodePoint(keyBytes);
     _peerPublicKey = ECPublicKey(point, ecParams);
     print('ActivePeer($address): Peer Public Key Parsed.');
+
+    final nodeId = NodeId.fromPublicKeyBytes(Uint8List.fromList(keyBytes));
+    onNodeIdDiscovered?.call(nodeId.toHex());
 
     if (_randomFromUs == null) {
       _handshakeInitiationFuture = _initiateEncryptionHandshake();
@@ -684,6 +864,25 @@ class ActivePeer {
     print('ActivePeer($address): Sending pong...');
     _sendData([_cmdPong]);
     _pongSent = true;
+  }
+
+  /// Sends a ping to measure latency.
+  void ping() {
+    if (_pingStopwatch != null) return; // Already pinging
+    print('ActivePeer($address): Sending Ping (Latency Check)...');
+    _pingStopwatch = Stopwatch()..start();
+    _sendData([_cmdPing]);
+  }
+
+  void _updateLatency(int latency) {
+    if (averageLatencyMs == 9999) {
+      averageLatencyMs = latency;
+    } else {
+      // Exponential moving average (weight new value by 30%)
+      averageLatencyMs = (averageLatencyMs * 0.7 + latency * 0.3).round();
+    }
+    print('ActivePeer($address): Latency updated to ${averageLatencyMs}ms (current: ${latency}ms)');
+    onLatencyUpdate?.call(averageLatencyMs);
   }
 
   void _sendData(List<int> data, {bool forceUnencrypted = false}) {

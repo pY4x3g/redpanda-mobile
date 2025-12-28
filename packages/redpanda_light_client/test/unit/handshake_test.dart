@@ -80,8 +80,8 @@ void main() {
             // Byte 5: Type. Should be 1.
             expect(
               c[5],
-              equals(1),
-              reason: "Handshake byte at index 5 must be 1 (Light Client)",
+              equals(160),
+              reason: "Handshake byte at index 5 must be 160 (Light Client)",
             );
             handshakeFound = true;
           }

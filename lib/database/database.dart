@@ -39,12 +39,24 @@ class Messages extends Table {
   IntColumn get type => integer()(); // Enum index
 }
 
-@DriftDatabase(tables: [Users, Channels, Messages])
+class Peers extends Table {
+  TextColumn get address => text().unique()();
+  TextColumn get nodeId => text().nullable()();
+  IntColumn get averageLatencyMs => integer().withDefault(const Constant(9999))();
+  IntColumn get successCount => integer().withDefault(const Constant(0))();
+  IntColumn get failureCount => integer().withDefault(const Constant(0))();
+  DateTimeColumn get lastSeen => dateTime().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {address};
+}
+
+@DriftDatabase(tables: [Users, Channels, Messages, Peers])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 2; // Incremented schema version
+  int get schemaVersion => 4; // Incremented schema version to 4 for nodeId
 
   @override
   MigrationStrategy get migration {
@@ -60,6 +72,12 @@ class AppDatabase extends _$AppDatabase {
           // 'Contacts' table will remain but be unused unless we drop it.
           await m.createTable(channels);
           // Note: In real app we might want to migrate data from contacts to channels.
+        }
+        if (from < 3) {
+          await m.createTable(peers);
+        }
+        if (from < 4) {
+          await m.addColumn(peers, peers.nodeId);
         }
       },
     );

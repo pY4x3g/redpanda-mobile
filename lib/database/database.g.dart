@@ -1146,12 +1146,443 @@ class MessagesCompanion extends UpdateCompanion<Message> {
   }
 }
 
+class $PeersTable extends Peers with TableInfo<$PeersTable, Peer> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PeersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _addressMeta = const VerificationMeta(
+    'address',
+  );
+  @override
+  late final GeneratedColumn<String> address = GeneratedColumn<String>(
+    'address',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _nodeIdMeta = const VerificationMeta('nodeId');
+  @override
+  late final GeneratedColumn<String> nodeId = GeneratedColumn<String>(
+    'node_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _averageLatencyMsMeta = const VerificationMeta(
+    'averageLatencyMs',
+  );
+  @override
+  late final GeneratedColumn<int> averageLatencyMs = GeneratedColumn<int>(
+    'average_latency_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(9999),
+  );
+  static const VerificationMeta _successCountMeta = const VerificationMeta(
+    'successCount',
+  );
+  @override
+  late final GeneratedColumn<int> successCount = GeneratedColumn<int>(
+    'success_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _failureCountMeta = const VerificationMeta(
+    'failureCount',
+  );
+  @override
+  late final GeneratedColumn<int> failureCount = GeneratedColumn<int>(
+    'failure_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lastSeenMeta = const VerificationMeta(
+    'lastSeen',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastSeen = GeneratedColumn<DateTime>(
+    'last_seen',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    address,
+    nodeId,
+    averageLatencyMs,
+    successCount,
+    failureCount,
+    lastSeen,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'peers';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Peer> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('address')) {
+      context.handle(
+        _addressMeta,
+        address.isAcceptableOrUnknown(data['address']!, _addressMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_addressMeta);
+    }
+    if (data.containsKey('node_id')) {
+      context.handle(
+        _nodeIdMeta,
+        nodeId.isAcceptableOrUnknown(data['node_id']!, _nodeIdMeta),
+      );
+    }
+    if (data.containsKey('average_latency_ms')) {
+      context.handle(
+        _averageLatencyMsMeta,
+        averageLatencyMs.isAcceptableOrUnknown(
+          data['average_latency_ms']!,
+          _averageLatencyMsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('success_count')) {
+      context.handle(
+        _successCountMeta,
+        successCount.isAcceptableOrUnknown(
+          data['success_count']!,
+          _successCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('failure_count')) {
+      context.handle(
+        _failureCountMeta,
+        failureCount.isAcceptableOrUnknown(
+          data['failure_count']!,
+          _failureCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_seen')) {
+      context.handle(
+        _lastSeenMeta,
+        lastSeen.isAcceptableOrUnknown(data['last_seen']!, _lastSeenMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {address};
+  @override
+  Peer map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Peer(
+      address: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}address'],
+      )!,
+      nodeId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}node_id'],
+      ),
+      averageLatencyMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}average_latency_ms'],
+      )!,
+      successCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}success_count'],
+      )!,
+      failureCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}failure_count'],
+      )!,
+      lastSeen: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_seen'],
+      ),
+    );
+  }
+
+  @override
+  $PeersTable createAlias(String alias) {
+    return $PeersTable(attachedDatabase, alias);
+  }
+}
+
+class Peer extends DataClass implements Insertable<Peer> {
+  final String address;
+  final String? nodeId;
+  final int averageLatencyMs;
+  final int successCount;
+  final int failureCount;
+  final DateTime? lastSeen;
+  const Peer({
+    required this.address,
+    this.nodeId,
+    required this.averageLatencyMs,
+    required this.successCount,
+    required this.failureCount,
+    this.lastSeen,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['address'] = Variable<String>(address);
+    if (!nullToAbsent || nodeId != null) {
+      map['node_id'] = Variable<String>(nodeId);
+    }
+    map['average_latency_ms'] = Variable<int>(averageLatencyMs);
+    map['success_count'] = Variable<int>(successCount);
+    map['failure_count'] = Variable<int>(failureCount);
+    if (!nullToAbsent || lastSeen != null) {
+      map['last_seen'] = Variable<DateTime>(lastSeen);
+    }
+    return map;
+  }
+
+  PeersCompanion toCompanion(bool nullToAbsent) {
+    return PeersCompanion(
+      address: Value(address),
+      nodeId: nodeId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(nodeId),
+      averageLatencyMs: Value(averageLatencyMs),
+      successCount: Value(successCount),
+      failureCount: Value(failureCount),
+      lastSeen: lastSeen == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastSeen),
+    );
+  }
+
+  factory Peer.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Peer(
+      address: serializer.fromJson<String>(json['address']),
+      nodeId: serializer.fromJson<String?>(json['nodeId']),
+      averageLatencyMs: serializer.fromJson<int>(json['averageLatencyMs']),
+      successCount: serializer.fromJson<int>(json['successCount']),
+      failureCount: serializer.fromJson<int>(json['failureCount']),
+      lastSeen: serializer.fromJson<DateTime?>(json['lastSeen']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'address': serializer.toJson<String>(address),
+      'nodeId': serializer.toJson<String?>(nodeId),
+      'averageLatencyMs': serializer.toJson<int>(averageLatencyMs),
+      'successCount': serializer.toJson<int>(successCount),
+      'failureCount': serializer.toJson<int>(failureCount),
+      'lastSeen': serializer.toJson<DateTime?>(lastSeen),
+    };
+  }
+
+  Peer copyWith({
+    String? address,
+    Value<String?> nodeId = const Value.absent(),
+    int? averageLatencyMs,
+    int? successCount,
+    int? failureCount,
+    Value<DateTime?> lastSeen = const Value.absent(),
+  }) => Peer(
+    address: address ?? this.address,
+    nodeId: nodeId.present ? nodeId.value : this.nodeId,
+    averageLatencyMs: averageLatencyMs ?? this.averageLatencyMs,
+    successCount: successCount ?? this.successCount,
+    failureCount: failureCount ?? this.failureCount,
+    lastSeen: lastSeen.present ? lastSeen.value : this.lastSeen,
+  );
+  Peer copyWithCompanion(PeersCompanion data) {
+    return Peer(
+      address: data.address.present ? data.address.value : this.address,
+      nodeId: data.nodeId.present ? data.nodeId.value : this.nodeId,
+      averageLatencyMs: data.averageLatencyMs.present
+          ? data.averageLatencyMs.value
+          : this.averageLatencyMs,
+      successCount: data.successCount.present
+          ? data.successCount.value
+          : this.successCount,
+      failureCount: data.failureCount.present
+          ? data.failureCount.value
+          : this.failureCount,
+      lastSeen: data.lastSeen.present ? data.lastSeen.value : this.lastSeen,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Peer(')
+          ..write('address: $address, ')
+          ..write('nodeId: $nodeId, ')
+          ..write('averageLatencyMs: $averageLatencyMs, ')
+          ..write('successCount: $successCount, ')
+          ..write('failureCount: $failureCount, ')
+          ..write('lastSeen: $lastSeen')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    address,
+    nodeId,
+    averageLatencyMs,
+    successCount,
+    failureCount,
+    lastSeen,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Peer &&
+          other.address == this.address &&
+          other.nodeId == this.nodeId &&
+          other.averageLatencyMs == this.averageLatencyMs &&
+          other.successCount == this.successCount &&
+          other.failureCount == this.failureCount &&
+          other.lastSeen == this.lastSeen);
+}
+
+class PeersCompanion extends UpdateCompanion<Peer> {
+  final Value<String> address;
+  final Value<String?> nodeId;
+  final Value<int> averageLatencyMs;
+  final Value<int> successCount;
+  final Value<int> failureCount;
+  final Value<DateTime?> lastSeen;
+  final Value<int> rowid;
+  const PeersCompanion({
+    this.address = const Value.absent(),
+    this.nodeId = const Value.absent(),
+    this.averageLatencyMs = const Value.absent(),
+    this.successCount = const Value.absent(),
+    this.failureCount = const Value.absent(),
+    this.lastSeen = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PeersCompanion.insert({
+    required String address,
+    this.nodeId = const Value.absent(),
+    this.averageLatencyMs = const Value.absent(),
+    this.successCount = const Value.absent(),
+    this.failureCount = const Value.absent(),
+    this.lastSeen = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : address = Value(address);
+  static Insertable<Peer> custom({
+    Expression<String>? address,
+    Expression<String>? nodeId,
+    Expression<int>? averageLatencyMs,
+    Expression<int>? successCount,
+    Expression<int>? failureCount,
+    Expression<DateTime>? lastSeen,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (address != null) 'address': address,
+      if (nodeId != null) 'node_id': nodeId,
+      if (averageLatencyMs != null) 'average_latency_ms': averageLatencyMs,
+      if (successCount != null) 'success_count': successCount,
+      if (failureCount != null) 'failure_count': failureCount,
+      if (lastSeen != null) 'last_seen': lastSeen,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PeersCompanion copyWith({
+    Value<String>? address,
+    Value<String?>? nodeId,
+    Value<int>? averageLatencyMs,
+    Value<int>? successCount,
+    Value<int>? failureCount,
+    Value<DateTime?>? lastSeen,
+    Value<int>? rowid,
+  }) {
+    return PeersCompanion(
+      address: address ?? this.address,
+      nodeId: nodeId ?? this.nodeId,
+      averageLatencyMs: averageLatencyMs ?? this.averageLatencyMs,
+      successCount: successCount ?? this.successCount,
+      failureCount: failureCount ?? this.failureCount,
+      lastSeen: lastSeen ?? this.lastSeen,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (address.present) {
+      map['address'] = Variable<String>(address.value);
+    }
+    if (nodeId.present) {
+      map['node_id'] = Variable<String>(nodeId.value);
+    }
+    if (averageLatencyMs.present) {
+      map['average_latency_ms'] = Variable<int>(averageLatencyMs.value);
+    }
+    if (successCount.present) {
+      map['success_count'] = Variable<int>(successCount.value);
+    }
+    if (failureCount.present) {
+      map['failure_count'] = Variable<int>(failureCount.value);
+    }
+    if (lastSeen.present) {
+      map['last_seen'] = Variable<DateTime>(lastSeen.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PeersCompanion(')
+          ..write('address: $address, ')
+          ..write('nodeId: $nodeId, ')
+          ..write('averageLatencyMs: $averageLatencyMs, ')
+          ..write('successCount: $successCount, ')
+          ..write('failureCount: $failureCount, ')
+          ..write('lastSeen: $lastSeen, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $UsersTable users = $UsersTable(this);
   late final $ChannelsTable channels = $ChannelsTable(this);
   late final $MessagesTable messages = $MessagesTable(this);
+  late final $PeersTable peers = $PeersTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1160,6 +1591,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     users,
     channels,
     messages,
+    peers,
   ];
 }
 
@@ -1988,6 +2420,224 @@ typedef $$MessagesTableProcessedTableManager =
       Message,
       PrefetchHooks Function({bool conversationId})
     >;
+typedef $$PeersTableCreateCompanionBuilder =
+    PeersCompanion Function({
+      required String address,
+      Value<String?> nodeId,
+      Value<int> averageLatencyMs,
+      Value<int> successCount,
+      Value<int> failureCount,
+      Value<DateTime?> lastSeen,
+      Value<int> rowid,
+    });
+typedef $$PeersTableUpdateCompanionBuilder =
+    PeersCompanion Function({
+      Value<String> address,
+      Value<String?> nodeId,
+      Value<int> averageLatencyMs,
+      Value<int> successCount,
+      Value<int> failureCount,
+      Value<DateTime?> lastSeen,
+      Value<int> rowid,
+    });
+
+class $$PeersTableFilterComposer extends Composer<_$AppDatabase, $PeersTable> {
+  $$PeersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get address => $composableBuilder(
+    column: $table.address,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nodeId => $composableBuilder(
+    column: $table.nodeId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get averageLatencyMs => $composableBuilder(
+    column: $table.averageLatencyMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get successCount => $composableBuilder(
+    column: $table.successCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get failureCount => $composableBuilder(
+    column: $table.failureCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastSeen => $composableBuilder(
+    column: $table.lastSeen,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PeersTableOrderingComposer
+    extends Composer<_$AppDatabase, $PeersTable> {
+  $$PeersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get address => $composableBuilder(
+    column: $table.address,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get nodeId => $composableBuilder(
+    column: $table.nodeId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get averageLatencyMs => $composableBuilder(
+    column: $table.averageLatencyMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get successCount => $composableBuilder(
+    column: $table.successCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get failureCount => $composableBuilder(
+    column: $table.failureCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastSeen => $composableBuilder(
+    column: $table.lastSeen,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PeersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PeersTable> {
+  $$PeersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get address =>
+      $composableBuilder(column: $table.address, builder: (column) => column);
+
+  GeneratedColumn<String> get nodeId =>
+      $composableBuilder(column: $table.nodeId, builder: (column) => column);
+
+  GeneratedColumn<int> get averageLatencyMs => $composableBuilder(
+    column: $table.averageLatencyMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get successCount => $composableBuilder(
+    column: $table.successCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get failureCount => $composableBuilder(
+    column: $table.failureCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastSeen =>
+      $composableBuilder(column: $table.lastSeen, builder: (column) => column);
+}
+
+class $$PeersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PeersTable,
+          Peer,
+          $$PeersTableFilterComposer,
+          $$PeersTableOrderingComposer,
+          $$PeersTableAnnotationComposer,
+          $$PeersTableCreateCompanionBuilder,
+          $$PeersTableUpdateCompanionBuilder,
+          (Peer, BaseReferences<_$AppDatabase, $PeersTable, Peer>),
+          Peer,
+          PrefetchHooks Function()
+        > {
+  $$PeersTableTableManager(_$AppDatabase db, $PeersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PeersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PeersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PeersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> address = const Value.absent(),
+                Value<String?> nodeId = const Value.absent(),
+                Value<int> averageLatencyMs = const Value.absent(),
+                Value<int> successCount = const Value.absent(),
+                Value<int> failureCount = const Value.absent(),
+                Value<DateTime?> lastSeen = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PeersCompanion(
+                address: address,
+                nodeId: nodeId,
+                averageLatencyMs: averageLatencyMs,
+                successCount: successCount,
+                failureCount: failureCount,
+                lastSeen: lastSeen,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String address,
+                Value<String?> nodeId = const Value.absent(),
+                Value<int> averageLatencyMs = const Value.absent(),
+                Value<int> successCount = const Value.absent(),
+                Value<int> failureCount = const Value.absent(),
+                Value<DateTime?> lastSeen = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PeersCompanion.insert(
+                address: address,
+                nodeId: nodeId,
+                averageLatencyMs: averageLatencyMs,
+                successCount: successCount,
+                failureCount: failureCount,
+                lastSeen: lastSeen,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PeersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PeersTable,
+      Peer,
+      $$PeersTableFilterComposer,
+      $$PeersTableOrderingComposer,
+      $$PeersTableAnnotationComposer,
+      $$PeersTableCreateCompanionBuilder,
+      $$PeersTableUpdateCompanionBuilder,
+      (Peer, BaseReferences<_$AppDatabase, $PeersTable, Peer>),
+      Peer,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -1998,4 +2648,6 @@ class $AppDatabaseManager {
       $$ChannelsTableTableManager(_db, _db.channels);
   $$MessagesTableTableManager get messages =>
       $$MessagesTableTableManager(_db, _db.messages);
+  $$PeersTableTableManager get peers =>
+      $$PeersTableTableManager(_db, _db.peers);
 }

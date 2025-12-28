@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:redpanda/shared/providers.dart';
+import 'package:go_router/go_router.dart';
 import 'package:redpanda_light_client/redpanda_light_client.dart';
 
 class ConnectionStatusBadge extends ConsumerWidget {
@@ -45,9 +46,7 @@ class ConnectionStatusBadge extends ConsumerWidget {
               icon: Icon(icon, color: color),
               tooltip: tooltip,
               onPressed: () {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text(tooltip)));
+                context.push('/debug-stats');
               },
             ),
             if (status == ConnectionStatus.connected && count > 0)

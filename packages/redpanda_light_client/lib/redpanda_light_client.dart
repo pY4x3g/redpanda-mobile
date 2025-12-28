@@ -11,3 +11,5 @@ export 'src/models/connection_status.dart';
 export 'src/models/node_id.dart';
 export 'src/models/key_pair.dart';
 export 'src/mock/mock_redpanda_client.dart';
+export 'src/peer_repository.dart';
+export 'src/models/peer_stats.dart';

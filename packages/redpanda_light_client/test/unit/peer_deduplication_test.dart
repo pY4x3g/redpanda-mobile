@@ -81,8 +81,8 @@ void main() {
 
       await client.connect();
 
-      // Allow initial connection
-      await Future.delayed(Duration(milliseconds: 100));
+      // Allow initial connection (async seed loading needs time + timer tick)
+      await Future.delayed(Duration(milliseconds: 3500));
       expect(connectionAttempts, contains('localhost:5000'));
       connectionAttempts.length;
 
