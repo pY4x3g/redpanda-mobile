@@ -6,7 +6,7 @@ library;
 /// It must NOT import Flutter or any UI components.
 
 export 'src/client_facade.dart';
-export 'src/client_impl.dart';
+export 'src/client/redpanda_light_client.dart';
 export 'src/models/connection_status.dart';
 export 'src/models/node_id.dart';
 export 'src/models/key_pair.dart';
