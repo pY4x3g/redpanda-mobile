@@ -16,7 +16,6 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
   static const VerificationMeta _usernameMeta = const VerificationMeta(
     'username',
@@ -331,30 +330,39 @@ class $ChannelsTable extends Channels with TableInfo<$ChannelsTable, Channel> {
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
-  static const VerificationMeta _usernameMeta = const VerificationMeta(
-    'username',
-  );
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
   @override
-  late final GeneratedColumn<String> username = GeneratedColumn<String>(
-    'username',
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+    'label',
     aliasedName,
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _privateKeyMeta = const VerificationMeta(
-    'privateKey',
+  static const VerificationMeta _encryptionKeyMeta = const VerificationMeta(
+    'encryptionKey',
   );
   @override
-  late final GeneratedColumn<String> privateKey = GeneratedColumn<String>(
-    'private_key',
+  late final GeneratedColumn<String> encryptionKey = GeneratedColumn<String>(
+    'encryption_key',
     aliasedName,
-    true,
+    false,
     type: DriftSqlType.string,
-    requiredDuringInsert: false,
+    requiredDuringInsert: true,
   );
+  static const VerificationMeta _authenticationKeyMeta = const VerificationMeta(
+    'authenticationKey',
+  );
+  @override
+  late final GeneratedColumn<String> authenticationKey =
+      GeneratedColumn<String>(
+        'authentication_key',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
   static const VerificationMeta _lastSeenMeta = const VerificationMeta(
     'lastSeen',
   );
@@ -366,28 +374,13 @@ class $ChannelsTable extends Channels with TableInfo<$ChannelsTable, Channel> {
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _isOnlineMeta = const VerificationMeta(
-    'isOnline',
-  );
-  @override
-  late final GeneratedColumn<bool> isOnline = GeneratedColumn<bool>(
-    'is_online',
-    aliasedName,
-    false,
-    type: DriftSqlType.bool,
-    requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_online" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
-  );
   @override
   List<GeneratedColumn> get $columns => [
     uuid,
-    username,
-    privateKey,
+    label,
+    encryptionKey,
+    authenticationKey,
     lastSeen,
-    isOnline,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -409,30 +402,40 @@ class $ChannelsTable extends Channels with TableInfo<$ChannelsTable, Channel> {
     } else if (isInserting) {
       context.missing(_uuidMeta);
     }
-    if (data.containsKey('username')) {
+    if (data.containsKey('label')) {
       context.handle(
-        _usernameMeta,
-        username.isAcceptableOrUnknown(data['username']!, _usernameMeta),
+        _labelMeta,
+        label.isAcceptableOrUnknown(data['label']!, _labelMeta),
       );
     } else if (isInserting) {
-      context.missing(_usernameMeta);
+      context.missing(_labelMeta);
     }
-    if (data.containsKey('private_key')) {
+    if (data.containsKey('encryption_key')) {
       context.handle(
-        _privateKeyMeta,
-        privateKey.isAcceptableOrUnknown(data['private_key']!, _privateKeyMeta),
+        _encryptionKeyMeta,
+        encryptionKey.isAcceptableOrUnknown(
+          data['encryption_key']!,
+          _encryptionKeyMeta,
+        ),
       );
+    } else if (isInserting) {
+      context.missing(_encryptionKeyMeta);
+    }
+    if (data.containsKey('authentication_key')) {
+      context.handle(
+        _authenticationKeyMeta,
+        authenticationKey.isAcceptableOrUnknown(
+          data['authentication_key']!,
+          _authenticationKeyMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_authenticationKeyMeta);
     }
     if (data.containsKey('last_seen')) {
       context.handle(
         _lastSeenMeta,
         lastSeen.isAcceptableOrUnknown(data['last_seen']!, _lastSeenMeta),
-      );
-    }
-    if (data.containsKey('is_online')) {
-      context.handle(
-        _isOnlineMeta,
-        isOnline.isAcceptableOrUnknown(data['is_online']!, _isOnlineMeta),
       );
     }
     return context;
@@ -448,22 +451,22 @@ class $ChannelsTable extends Channels with TableInfo<$ChannelsTable, Channel> {
         DriftSqlType.string,
         data['${effectivePrefix}uuid'],
       )!,
-      username: attachedDatabase.typeMapping.read(
+      label: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}username'],
+        data['${effectivePrefix}label'],
       )!,
-      privateKey: attachedDatabase.typeMapping.read(
+      encryptionKey: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}private_key'],
-      ),
+        data['${effectivePrefix}encryption_key'],
+      )!,
+      authenticationKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}authentication_key'],
+      )!,
       lastSeen: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}last_seen'],
       ),
-      isOnline: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}is_online'],
-      )!,
     );
   }
 
@@ -475,43 +478,39 @@ class $ChannelsTable extends Channels with TableInfo<$ChannelsTable, Channel> {
 
 class Channel extends DataClass implements Insertable<Channel> {
   final String uuid;
-  final String username;
-  final String? privateKey;
+  final String label;
+  final String encryptionKey;
+  final String authenticationKey;
   final DateTime? lastSeen;
-  final bool isOnline;
   const Channel({
     required this.uuid,
-    required this.username,
-    this.privateKey,
+    required this.label,
+    required this.encryptionKey,
+    required this.authenticationKey,
     this.lastSeen,
-    required this.isOnline,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['uuid'] = Variable<String>(uuid);
-    map['username'] = Variable<String>(username);
-    if (!nullToAbsent || privateKey != null) {
-      map['private_key'] = Variable<String>(privateKey);
-    }
+    map['label'] = Variable<String>(label);
+    map['encryption_key'] = Variable<String>(encryptionKey);
+    map['authentication_key'] = Variable<String>(authenticationKey);
     if (!nullToAbsent || lastSeen != null) {
       map['last_seen'] = Variable<DateTime>(lastSeen);
     }
-    map['is_online'] = Variable<bool>(isOnline);
     return map;
   }
 
   ChannelsCompanion toCompanion(bool nullToAbsent) {
     return ChannelsCompanion(
       uuid: Value(uuid),
-      username: Value(username),
-      privateKey: privateKey == null && nullToAbsent
-          ? const Value.absent()
-          : Value(privateKey),
+      label: Value(label),
+      encryptionKey: Value(encryptionKey),
+      authenticationKey: Value(authenticationKey),
       lastSeen: lastSeen == null && nullToAbsent
           ? const Value.absent()
           : Value(lastSeen),
-      isOnline: Value(isOnline),
     );
   }
 
@@ -522,10 +521,10 @@ class Channel extends DataClass implements Insertable<Channel> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Channel(
       uuid: serializer.fromJson<String>(json['uuid']),
-      username: serializer.fromJson<String>(json['username']),
-      privateKey: serializer.fromJson<String?>(json['privateKey']),
+      label: serializer.fromJson<String>(json['label']),
+      encryptionKey: serializer.fromJson<String>(json['encryptionKey']),
+      authenticationKey: serializer.fromJson<String>(json['authenticationKey']),
       lastSeen: serializer.fromJson<DateTime?>(json['lastSeen']),
-      isOnline: serializer.fromJson<bool>(json['isOnline']),
     );
   }
   @override
@@ -533,35 +532,37 @@ class Channel extends DataClass implements Insertable<Channel> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'uuid': serializer.toJson<String>(uuid),
-      'username': serializer.toJson<String>(username),
-      'privateKey': serializer.toJson<String?>(privateKey),
+      'label': serializer.toJson<String>(label),
+      'encryptionKey': serializer.toJson<String>(encryptionKey),
+      'authenticationKey': serializer.toJson<String>(authenticationKey),
       'lastSeen': serializer.toJson<DateTime?>(lastSeen),
-      'isOnline': serializer.toJson<bool>(isOnline),
     };
   }
 
   Channel copyWith({
     String? uuid,
-    String? username,
-    Value<String?> privateKey = const Value.absent(),
+    String? label,
+    String? encryptionKey,
+    String? authenticationKey,
     Value<DateTime?> lastSeen = const Value.absent(),
-    bool? isOnline,
   }) => Channel(
     uuid: uuid ?? this.uuid,
-    username: username ?? this.username,
-    privateKey: privateKey.present ? privateKey.value : this.privateKey,
+    label: label ?? this.label,
+    encryptionKey: encryptionKey ?? this.encryptionKey,
+    authenticationKey: authenticationKey ?? this.authenticationKey,
     lastSeen: lastSeen.present ? lastSeen.value : this.lastSeen,
-    isOnline: isOnline ?? this.isOnline,
   );
   Channel copyWithCompanion(ChannelsCompanion data) {
     return Channel(
       uuid: data.uuid.present ? data.uuid.value : this.uuid,
-      username: data.username.present ? data.username.value : this.username,
-      privateKey: data.privateKey.present
-          ? data.privateKey.value
-          : this.privateKey,
+      label: data.label.present ? data.label.value : this.label,
+      encryptionKey: data.encryptionKey.present
+          ? data.encryptionKey.value
+          : this.encryptionKey,
+      authenticationKey: data.authenticationKey.present
+          ? data.authenticationKey.value
+          : this.authenticationKey,
       lastSeen: data.lastSeen.present ? data.lastSeen.value : this.lastSeen,
-      isOnline: data.isOnline.present ? data.isOnline.value : this.isOnline,
     );
   }
 
@@ -569,84 +570,86 @@ class Channel extends DataClass implements Insertable<Channel> {
   String toString() {
     return (StringBuffer('Channel(')
           ..write('uuid: $uuid, ')
-          ..write('username: $username, ')
-          ..write('privateKey: $privateKey, ')
-          ..write('lastSeen: $lastSeen, ')
-          ..write('isOnline: $isOnline')
+          ..write('label: $label, ')
+          ..write('encryptionKey: $encryptionKey, ')
+          ..write('authenticationKey: $authenticationKey, ')
+          ..write('lastSeen: $lastSeen')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode =>
-      Object.hash(uuid, username, privateKey, lastSeen, isOnline);
+      Object.hash(uuid, label, encryptionKey, authenticationKey, lastSeen);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Channel &&
           other.uuid == this.uuid &&
-          other.username == this.username &&
-          other.privateKey == this.privateKey &&
-          other.lastSeen == this.lastSeen &&
-          other.isOnline == this.isOnline);
+          other.label == this.label &&
+          other.encryptionKey == this.encryptionKey &&
+          other.authenticationKey == this.authenticationKey &&
+          other.lastSeen == this.lastSeen);
 }
 
 class ChannelsCompanion extends UpdateCompanion<Channel> {
   final Value<String> uuid;
-  final Value<String> username;
-  final Value<String?> privateKey;
+  final Value<String> label;
+  final Value<String> encryptionKey;
+  final Value<String> authenticationKey;
   final Value<DateTime?> lastSeen;
-  final Value<bool> isOnline;
   final Value<int> rowid;
   const ChannelsCompanion({
     this.uuid = const Value.absent(),
-    this.username = const Value.absent(),
-    this.privateKey = const Value.absent(),
+    this.label = const Value.absent(),
+    this.encryptionKey = const Value.absent(),
+    this.authenticationKey = const Value.absent(),
     this.lastSeen = const Value.absent(),
-    this.isOnline = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ChannelsCompanion.insert({
     required String uuid,
-    required String username,
-    this.privateKey = const Value.absent(),
+    required String label,
+    required String encryptionKey,
+    required String authenticationKey,
     this.lastSeen = const Value.absent(),
-    this.isOnline = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : uuid = Value(uuid),
-       username = Value(username);
+       label = Value(label),
+       encryptionKey = Value(encryptionKey),
+       authenticationKey = Value(authenticationKey);
   static Insertable<Channel> custom({
     Expression<String>? uuid,
-    Expression<String>? username,
-    Expression<String>? privateKey,
+    Expression<String>? label,
+    Expression<String>? encryptionKey,
+    Expression<String>? authenticationKey,
     Expression<DateTime>? lastSeen,
-    Expression<bool>? isOnline,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (uuid != null) 'uuid': uuid,
-      if (username != null) 'username': username,
-      if (privateKey != null) 'private_key': privateKey,
+      if (label != null) 'label': label,
+      if (encryptionKey != null) 'encryption_key': encryptionKey,
+      if (authenticationKey != null) 'authentication_key': authenticationKey,
       if (lastSeen != null) 'last_seen': lastSeen,
-      if (isOnline != null) 'is_online': isOnline,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
   ChannelsCompanion copyWith({
     Value<String>? uuid,
-    Value<String>? username,
-    Value<String?>? privateKey,
+    Value<String>? label,
+    Value<String>? encryptionKey,
+    Value<String>? authenticationKey,
     Value<DateTime?>? lastSeen,
-    Value<bool>? isOnline,
     Value<int>? rowid,
   }) {
     return ChannelsCompanion(
       uuid: uuid ?? this.uuid,
-      username: username ?? this.username,
-      privateKey: privateKey ?? this.privateKey,
+      label: label ?? this.label,
+      encryptionKey: encryptionKey ?? this.encryptionKey,
+      authenticationKey: authenticationKey ?? this.authenticationKey,
       lastSeen: lastSeen ?? this.lastSeen,
-      isOnline: isOnline ?? this.isOnline,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -657,17 +660,17 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
     if (uuid.present) {
       map['uuid'] = Variable<String>(uuid.value);
     }
-    if (username.present) {
-      map['username'] = Variable<String>(username.value);
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
     }
-    if (privateKey.present) {
-      map['private_key'] = Variable<String>(privateKey.value);
+    if (encryptionKey.present) {
+      map['encryption_key'] = Variable<String>(encryptionKey.value);
+    }
+    if (authenticationKey.present) {
+      map['authentication_key'] = Variable<String>(authenticationKey.value);
     }
     if (lastSeen.present) {
       map['last_seen'] = Variable<DateTime>(lastSeen.value);
-    }
-    if (isOnline.present) {
-      map['is_online'] = Variable<bool>(isOnline.value);
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -679,10 +682,10 @@ class ChannelsCompanion extends UpdateCompanion<Channel> {
   String toString() {
     return (StringBuffer('ChannelsCompanion(')
           ..write('uuid: $uuid, ')
-          ..write('username: $username, ')
-          ..write('privateKey: $privateKey, ')
+          ..write('label: $label, ')
+          ..write('encryptionKey: $encryptionKey, ')
+          ..write('authenticationKey: $authenticationKey, ')
           ..write('lastSeen: $lastSeen, ')
-          ..write('isOnline: $isOnline, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1161,7 +1164,6 @@ class $PeersTable extends Peers with TableInfo<$PeersTable, Peer> {
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
   static const VerificationMeta _nodeIdMeta = const VerificationMeta('nodeId');
   @override
@@ -1772,19 +1774,19 @@ typedef $$UsersTableProcessedTableManager =
 typedef $$ChannelsTableCreateCompanionBuilder =
     ChannelsCompanion Function({
       required String uuid,
-      required String username,
-      Value<String?> privateKey,
+      required String label,
+      required String encryptionKey,
+      required String authenticationKey,
       Value<DateTime?> lastSeen,
-      Value<bool> isOnline,
       Value<int> rowid,
     });
 typedef $$ChannelsTableUpdateCompanionBuilder =
     ChannelsCompanion Function({
       Value<String> uuid,
-      Value<String> username,
-      Value<String?> privateKey,
+      Value<String> label,
+      Value<String> encryptionKey,
+      Value<String> authenticationKey,
       Value<DateTime?> lastSeen,
-      Value<bool> isOnline,
       Value<int> rowid,
     });
 
@@ -1828,23 +1830,23 @@ class $$ChannelsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get username => $composableBuilder(
-    column: $table.username,
+  ColumnFilters<String> get label => $composableBuilder(
+    column: $table.label,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get privateKey => $composableBuilder(
-    column: $table.privateKey,
+  ColumnFilters<String> get encryptionKey => $composableBuilder(
+    column: $table.encryptionKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get authenticationKey => $composableBuilder(
+    column: $table.authenticationKey,
     builder: (column) => ColumnFilters(column),
   );
 
   ColumnFilters<DateTime> get lastSeen => $composableBuilder(
     column: $table.lastSeen,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<bool> get isOnline => $composableBuilder(
-    column: $table.isOnline,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1888,23 +1890,23 @@ class $$ChannelsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get username => $composableBuilder(
-    column: $table.username,
+  ColumnOrderings<String> get label => $composableBuilder(
+    column: $table.label,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get privateKey => $composableBuilder(
-    column: $table.privateKey,
+  ColumnOrderings<String> get encryptionKey => $composableBuilder(
+    column: $table.encryptionKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get authenticationKey => $composableBuilder(
+    column: $table.authenticationKey,
     builder: (column) => ColumnOrderings(column),
   );
 
   ColumnOrderings<DateTime> get lastSeen => $composableBuilder(
     column: $table.lastSeen,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<bool> get isOnline => $composableBuilder(
-    column: $table.isOnline,
     builder: (column) => ColumnOrderings(column),
   );
 }
@@ -1921,19 +1923,21 @@ class $$ChannelsTableAnnotationComposer
   GeneratedColumn<String> get uuid =>
       $composableBuilder(column: $table.uuid, builder: (column) => column);
 
-  GeneratedColumn<String> get username =>
-      $composableBuilder(column: $table.username, builder: (column) => column);
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
 
-  GeneratedColumn<String> get privateKey => $composableBuilder(
-    column: $table.privateKey,
+  GeneratedColumn<String> get encryptionKey => $composableBuilder(
+    column: $table.encryptionKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get authenticationKey => $composableBuilder(
+    column: $table.authenticationKey,
     builder: (column) => column,
   );
 
   GeneratedColumn<DateTime> get lastSeen =>
       $composableBuilder(column: $table.lastSeen, builder: (column) => column);
-
-  GeneratedColumn<bool> get isOnline =>
-      $composableBuilder(column: $table.isOnline, builder: (column) => column);
 
   Expression<T> messagesRefs<T extends Object>(
     Expression<T> Function($$MessagesTableAnnotationComposer a) f,
@@ -1990,33 +1994,33 @@ class $$ChannelsTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> uuid = const Value.absent(),
-                Value<String> username = const Value.absent(),
-                Value<String?> privateKey = const Value.absent(),
+                Value<String> label = const Value.absent(),
+                Value<String> encryptionKey = const Value.absent(),
+                Value<String> authenticationKey = const Value.absent(),
                 Value<DateTime?> lastSeen = const Value.absent(),
-                Value<bool> isOnline = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ChannelsCompanion(
                 uuid: uuid,
-                username: username,
-                privateKey: privateKey,
+                label: label,
+                encryptionKey: encryptionKey,
+                authenticationKey: authenticationKey,
                 lastSeen: lastSeen,
-                isOnline: isOnline,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
                 required String uuid,
-                required String username,
-                Value<String?> privateKey = const Value.absent(),
+                required String label,
+                required String encryptionKey,
+                required String authenticationKey,
                 Value<DateTime?> lastSeen = const Value.absent(),
-                Value<bool> isOnline = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ChannelsCompanion.insert(
                 uuid: uuid,
-                username: username,
-                privateKey: privateKey,
+                label: label,
+                encryptionKey: encryptionKey,
+                authenticationKey: authenticationKey,
                 lastSeen: lastSeen,
-                isOnline: isOnline,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

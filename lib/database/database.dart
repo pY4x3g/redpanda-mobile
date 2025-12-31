@@ -8,7 +8,7 @@ part 'database.g.dart';
 
 // Tables
 class Users extends Table {
-  TextColumn get uuid => text().unique()();
+  TextColumn get uuid => text()();
   TextColumn get username => text()();
   TextColumn get avatarUrl => text().nullable()();
   TextColumn get publicKey => text().nullable()();
@@ -18,15 +18,19 @@ class Users extends Table {
 }
 
 class Channels extends Table {
-  TextColumn get uuid => text().unique()();
-  TextColumn get username => text()();
-  TextColumn get privateKey => text().nullable()(); // Added privateKey
-  DateTimeColumn get lastSeen => dateTime().nullable()();
-  BoolColumn get isOnline => boolean().withDefault(const Constant(false))();
-
+  TextColumn get uuid => text()(); // The Channel ID (Hash of keys)
+  TextColumn get label => text()();
+  TextColumn get encryptionKey => text()(); // HEX encoded
+  TextColumn get authenticationKey => text()(); // HEX encoded
+  
+  // Metadata
+  DateTimeColumn get lastSeen => dateTime().nullable()(); // Last message time? 
+  
   @override
   Set<Column> get primaryKey => {uuid};
 }
+
+
 
 class Messages extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -40,7 +44,7 @@ class Messages extends Table {
 }
 
 class Peers extends Table {
-  TextColumn get address => text().unique()();
+  TextColumn get address => text()();
   TextColumn get nodeId => text().nullable()();
   IntColumn get averageLatencyMs =>
       integer().withDefault(const Constant(9999))();
@@ -57,7 +61,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 4; // Incremented schema version to 4 for nodeId
+  int get schemaVersion => 5; // Incremented schema version to 5 for Channel updates
 
   @override
   MigrationStrategy get migration {
@@ -67,18 +71,22 @@ class AppDatabase extends _$AppDatabase {
       },
       onUpgrade: (Migrator m, int from, int to) async {
         if (from < 2) {
-          // Since we are renaming/changing significantly, for development simplifying by re-creating or adding new table.
-          // For now, let's just create the new table and drop the old one if needed, or better:
-          // Since we changed the class name, Drift sees it as a new table 'channels'.
-          // 'Contacts' table will remain but be unused unless we drop it.
-          await m.createTable(channels);
-          // Note: In real app we might want to migrate data from contacts to channels.
+           await m.createTable(channels);
         }
         if (from < 3) {
           await m.createTable(peers);
         }
         if (from < 4) {
           await m.addColumn(peers, peers.nodeId);
+        }
+        if (from < 5) {
+          // Destructive migration for dev: Recreate Channels table to match new schema
+          try {
+             await m.deleteTable(channels.actualTableName);
+          } catch(e) {
+             // optimize: table might not exist
+          }
+          await m.createTable(channels);
         }
       },
     );
